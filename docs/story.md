@@ -4,6 +4,11 @@
 - Insel muss programmiert werden, um den Core Compiler wiederherzustellen
 - 1 Level = 1 Konzept der Java Programmierung
 
+# Level 0: print
+## Beispiele
+- Spieler muss sich vorstellen (Ausgabe Name)
+- Name wird gespeichert, damit Spieler angesprochen werden kann
+
 # Level 1: Variablen und Datentypen
 int, double, boolean, string
 
