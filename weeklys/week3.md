@@ -1,5 +1,5 @@
-**Woche:** 3
-**Zeitraum:** 19.02.2026 – 26.02.2026
+**Woche:** 3\
+**Zeitraum:** 19.02.2026 – 26.02.2026\
 **Projektteilnehmer:** Marco Gaus, Maximilian Wunderlich
 
 # 1. Ziel der Woche
