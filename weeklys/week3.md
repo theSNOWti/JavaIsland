@@ -37,6 +37,6 @@ Mit dem Prolog wurde außerdem der erste inhaltliche Spielabschnitt erstellt, wo
 - Ausarbeitung der Level 1–3
 ```
 Level 1: Variablen
-Level 2 If-Verzweigungen
+Level 2: If-Verzweigungen
 Level 3: Schleifen
 ```
