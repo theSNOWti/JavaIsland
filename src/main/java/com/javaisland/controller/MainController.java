@@ -2,6 +2,7 @@ package com.javaisland.controller;
 
 import com.javaisland.model.LevelDto;
 import com.javaisland.model.TaskDto;
+import com.javaisland.repo.HintRepository;
 import com.javaisland.repo.LevelRepository;
 import com.javaisland.repo.PlayerRepository;
 import com.javaisland.repo.TaskRepository;
@@ -9,10 +10,13 @@ import com.javaisland.run.JavaRunner;
 import com.javaisland.validation.ValidationEngine;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class MainController {
 
@@ -22,10 +26,15 @@ public final class MainController {
   @FXML private Label taskTitleLabel;
   @FXML private Label instructionLabel;
 
+  @FXML private Button hintButton;
+  @FXML private Label hintStatusLabel;
+  @FXML private Label hintsLabel;
+
   @FXML private TextArea codeTextArea;
 
   private final LevelRepository levelRepo = new LevelRepository();
   private final TaskRepository taskRepo = new TaskRepository();
+  private final HintRepository hintRepo = new HintRepository();
   private final ValidationEngine validationEngine = new ValidationEngine();
   private final PlayerRepository playerRepo = new PlayerRepository();
 
@@ -33,6 +42,9 @@ public final class MainController {
 
   private LevelDto currentLevel;
   private TaskDto currentTask;
+
+  private List<String> currentHints = new ArrayList<>();
+  private int shownHintCount = 0;
 
   private static final String DEFAULT_CODE = """
       public class Main {
@@ -44,16 +56,13 @@ public final class MainController {
 
   @FXML
   private void initialize() {
-    // Make sure UI is ready, then load player + first task
     Platform.runLater(() -> {
       try {
         playerId = playerRepo.ensureCurrentPlayerId();
       } catch (Exception e) {
-        // Non-fatal: game can still run without saving player state
         System.err.println("Failed to ensure player: " + e.getMessage());
         playerId = 0;
       }
-
       loadFirstLevelFirstTask();
     });
   }
@@ -94,14 +103,20 @@ public final class MainController {
     taskTitleLabel.setText(task.title() != null ? task.title() : "-");
     instructionLabel.setText(task.description() != null ? task.description() : "");
 
+    // code
     String starter = (task.starterCode() != null && !task.starterCode().isBlank())
         ? task.starterCode()
         : DEFAULT_CODE;
-
     codeTextArea.setText(starter);
 
     int idx = codeTextArea.getText().indexOf("\"...\"");
     if (idx >= 0) codeTextArea.positionCaret(idx + 1);
+
+    // hints
+    currentHints = hintRepo.findHintsForTask(task.id());
+    shownHintCount = 0;
+    hintsLabel.setText("");
+    updateHintUi();
   }
 
   private void showNoTask() {
@@ -109,6 +124,50 @@ public final class MainController {
     instructionLabel.setText("");
     if (codeTextArea.getText() == null || codeTextArea.getText().isBlank()) {
       codeTextArea.setText(DEFAULT_CODE);
+    }
+
+    currentHints = List.of();
+    shownHintCount = 0;
+    hintsLabel.setText("");
+    updateHintUi();
+  }
+
+  @FXML
+  private void onHintClicked() {
+    if (currentTask == null) return;
+
+    if (shownHintCount < currentHints.size()) {
+      shownHintCount++;
+    }
+
+    // show 1..shownHintCount, including previous
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < shownHintCount; i++) {
+      if (i > 0) sb.append("\n\n");
+      sb.append("Hint ").append(i + 1).append(": ").append(currentHints.get(i));
+    }
+    hintsLabel.setText(sb.toString());
+
+    updateHintUi();
+  }
+
+  private void updateHintUi() {
+    int total = currentHints == null ? 0 : currentHints.size();
+
+    if (total == 0) {
+      hintButton.setDisable(true);
+      hintButton.setText("No hints");
+      hintStatusLabel.setText("");
+      return;
+    }
+
+    hintButton.setDisable(shownHintCount >= total);
+    if (shownHintCount >= total) {
+      hintButton.setText("No more hints");
+      hintStatusLabel.setText("(" + total + "/" + total + ")");
+    } else {
+      hintButton.setText("Show hint (" + (shownHintCount + 1) + "/" + total + ")");
+      hintStatusLabel.setText("(" + shownHintCount + "/" + total + ")");
     }
   }
 
@@ -149,7 +208,6 @@ public final class MainController {
           return;
         }
 
-        // If stdout contains "Mein Name ist ...", store the name
         String maybeName = extractNameFromStdout(run.stdout());
         if (maybeName != null && playerId > 0) {
           try {
@@ -160,7 +218,6 @@ public final class MainController {
           }
         }
 
-        // Success -> next task in same level
         TaskDto next = taskRepo.findNextTaskInLevel(
             currentTask.levelId(),
             currentTask.orderIndex(),
@@ -179,10 +236,6 @@ public final class MainController {
     });
   }
 
-  /**
-   * Takes program stdout, looks for a second line:
-   * "Mein Name ist <name>" and returns <name>.
-   */
   private static String extractNameFromStdout(String stdout) {
     if (stdout == null) return null;
 
