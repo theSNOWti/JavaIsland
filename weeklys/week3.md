@@ -1,17 +1,18 @@
 **Woche:** 3\
-**Zeitraum:** 19.02.2026 – 26.02.2026\
+**Zeitraum:** 19.02.2026 – 25.02.2026\
 **Projektteilnehmer:** Marco Gaus, Maximilian Wunderlich
 
 # 1. Ziel der Woche
 Ziel war es, eine technische Basis für das Projekt zu schaffen und mit der inhaltlichen Ausarbeitung des Spiels zu beginnen.
 
 # 2. Umgesetzte Aufgaben
-- Technische Umsetzung
+## Technische Umsetzung
 - Konzeptionierung des Datenbankmodells
 - Erstellung der Datenbank
 - Erstellung Grundlegende UI-Struktur
 - Verbindung zwischen UI und Datenbank hergestellt
-- Story / Game Design
+
+## Story / Game Design
 - Erstellung des Prologs (Level 0 – Einstieg in die Spielwelt)
 - Datenbank / Architektur
 - Definition Tabellenstruktur
