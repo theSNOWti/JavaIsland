@@ -12,7 +12,7 @@ public final class TaskRepository {
 
   public TaskDto findFirstTaskOfLevel(long levelId) {
     String sql = """
-        SELECT id, level_id, title, description, order_index, validation, code
+        SELECT id, level_id, title, description, order_index, validation, code, story, success_text
         FROM task
         WHERE level_id = ?
         ORDER BY order_index ASC, id ASC
@@ -26,7 +26,6 @@ public final class TaskRepository {
 
       try (ResultSet rs = ps.executeQuery()) {
         if (!rs.next()) return null;
-
         return mapRow(rs);
       }
     } catch (SQLException e) {
@@ -36,7 +35,7 @@ public final class TaskRepository {
 
   public TaskDto findNextTaskInLevel(long levelId, int currentOrderIndex, long currentTaskId) {
     String sql = """
-        SELECT id, level_id, title, description, order_index, validation, code
+        SELECT id, level_id, title, description, order_index, validation, code, story, success_text
         FROM task
         WHERE level_id = ?
           AND (order_index > ? OR (order_index = ? AND id > ?))
@@ -54,7 +53,6 @@ public final class TaskRepository {
 
       try (ResultSet rs = ps.executeQuery()) {
         if (!rs.next()) return null;
-
         return mapRow(rs);
       }
     } catch (SQLException e) {
@@ -70,7 +68,9 @@ public final class TaskRepository {
         rs.getString("description"),
         rs.getInt("order_index"),
         rs.getString("validation"),
-        rs.getString("code") // <-- comes from DB column "code"
+        rs.getString("code"),
+        rs.getString("story"),
+        rs.getString("success_text")
     );
   }
 }

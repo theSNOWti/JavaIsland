@@ -13,31 +13,50 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.layout.VBox;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 
 public final class MainController {
 
+  // --------------------
+  // UI (main)
+  // --------------------
   @FXML private Label statusLabel;
-
   @FXML private Label levelTitleLabel;
   @FXML private Label taskTitleLabel;
-  @FXML private Label instructionLabel;
 
   @FXML private Button hintButton;
   @FXML private Label hintStatusLabel;
   @FXML private Label hintsLabel;
 
   @FXML private TextArea codeTextArea;
+  @FXML private Button submitButton;
 
+  // --------------------
+  // UI (dialog overlay - always visible)
+  // --------------------
+  @FXML private VBox dialogOverlay;
+  @FXML private Label dialogTitleLabel;
+  @FXML private Label dialogTextLabel;
+  @FXML private Button dialogNextButton;
+
+  // --------------------
+  // Repos/Services
+  // --------------------
   private final LevelRepository levelRepo = new LevelRepository();
   private final TaskRepository taskRepo = new TaskRepository();
   private final HintRepository hintRepo = new HintRepository();
   private final ValidationEngine validationEngine = new ValidationEngine();
   private final PlayerRepository playerRepo = new PlayerRepository();
 
+  // --------------------
+  // State
+  // --------------------
   private long playerId;
 
   private LevelDto currentLevel;
@@ -45,6 +64,14 @@ public final class MainController {
 
   private List<String> currentHints = new ArrayList<>();
   private int shownHintCount = 0;
+
+  private enum PageKind { TEXT, TASK }
+
+  private record DialogPage(PageKind kind, String title, String text) {}
+
+  private final Deque<DialogPage> dialogQueue = new ArrayDeque<>();
+  private DialogPage currentDialogPage;
+  private boolean levelIntroAlreadyShown = false;
 
   private static final String DEFAULT_CODE = """
       public class Main {
@@ -54,8 +81,17 @@ public final class MainController {
       }
       """;
 
+  // --------------------
+  // Lifecycle
+  // --------------------
   @FXML
   private void initialize() {
+    // dialogOverlay is always visible per requirement; we only change its content + button visibility.
+    // Disable editing until we hit a TASK page.
+    codeTextArea.setDisable(true);
+    submitButton.setDisable(true);
+    hintButton.setDisable(true);
+
     Platform.runLater(() -> {
       try {
         playerId = playerRepo.ensureCurrentPlayerId();
@@ -72,8 +108,9 @@ public final class MainController {
       currentLevel = levelRepo.findFirstLevel();
       if (currentLevel == null) {
         statusLabel.setText("No levels found (SQLite table: level)");
-        codeTextArea.setText(DEFAULT_CODE);
         currentTask = null;
+        codeTextArea.setText(DEFAULT_CODE);
+        setDialog(PageKind.TEXT, "Fehler", "Keine Levels in der DB gefunden.");
         return;
       }
 
@@ -87,30 +124,32 @@ public final class MainController {
       if (currentTask == null) {
         statusLabel.setText("No tasks found for first level (SQLite table: task)");
         showNoTask();
+        setDialog(PageKind.TEXT, "Fehler", "Keine Tasks für dieses Level gefunden.");
         return;
       }
 
       showTask(currentTask);
+      startDialogForTaskStart(currentLevel, currentTask);
       statusLabel.setText("Ready.");
     } catch (Exception e) {
       statusLabel.setText("DB error: " + e.getMessage());
       currentTask = null;
       codeTextArea.setText(DEFAULT_CODE);
+      setDialog(PageKind.TEXT, "DB error", String.valueOf(e.getMessage()));
     }
   }
 
+  // --------------------
+  // Task UI
+  // --------------------
   private void showTask(TaskDto task) {
     taskTitleLabel.setText(task.title() != null ? task.title() : "-");
-    instructionLabel.setText(task.description() != null ? task.description() : "");
 
     // code
     String starter = (task.starterCode() != null && !task.starterCode().isBlank())
         ? task.starterCode()
         : DEFAULT_CODE;
     codeTextArea.setText(starter);
-
-    int idx = codeTextArea.getText().indexOf("\"...\"");
-    if (idx >= 0) codeTextArea.positionCaret(idx + 1);
 
     // hints
     currentHints = hintRepo.findHintsForTask(task.id());
@@ -121,60 +160,128 @@ public final class MainController {
 
   private void showNoTask() {
     taskTitleLabel.setText("-");
-    instructionLabel.setText("");
     if (codeTextArea.getText() == null || codeTextArea.getText().isBlank()) {
       codeTextArea.setText(DEFAULT_CODE);
     }
-
     currentHints = List.of();
     shownHintCount = 0;
     hintsLabel.setText("");
     updateHintUi();
   }
 
-  @FXML
-  private void onHintClicked() {
-    if (currentTask == null) return;
+  // --------------------
+  // Dialog scripting
+  // --------------------
+  private void startDialogForTaskStart(LevelDto level, TaskDto task) {
+    dialogQueue.clear();
 
-    if (shownHintCount < currentHints.size()) {
-      shownHintCount++;
+    // Level intro should appear once per app run (as requested earlier)
+    if (!levelIntroAlreadyShown) {
+      enqueueText("Prolog", level.introText());
+      if (isNotBlank(level.introText())) levelIntroAlreadyShown = true;
     }
 
-    // show 1..shownHintCount, including previous
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < shownHintCount; i++) {
-      if (i > 0) sb.append("\n\n");
-      sb.append("Hint ").append(i + 1).append(": ").append(currentHints.get(i));
-    }
-    hintsLabel.setText(sb.toString());
+    enqueueText(levelTitleLabel.getText(), task.story());
+    enqueueTask("Aufgabe", task.description());
 
-    updateHintUi();
+    showNextDialogPage();
   }
 
-  private void updateHintUi() {
-    int total = currentHints == null ? 0 : currentHints.size();
+  private void startDialogForTaskSuccessThenAdvance(TaskDto completedTask) {
+    dialogQueue.clear();
 
-    if (total == 0) {
-      hintButton.setDisable(true);
-      hintButton.setText("No hints");
-      hintStatusLabel.setText("");
+    enqueueText("Erfolg", completedTask.successText());
+
+    TaskDto next = taskRepo.findNextTaskInLevel(
+        completedTask.levelId(),
+        completedTask.orderIndex(),
+        completedTask.id()
+    );
+
+    if (next != null) {
+      currentTask = next;
+      showTask(currentTask);
+
+      enqueueText(levelTitleLabel.getText(), currentTask.story());
+      enqueueTask("Aufgabe", currentTask.description());
+    } else {
+      enqueueText("Abschluss", currentLevel != null ? currentLevel.outroText() : null);
+    }
+
+    showNextDialogPage();
+  }
+
+  private void enqueueText(String title, String text) {
+    if (!isNotBlank(text)) return;
+    dialogQueue.addLast(new DialogPage(PageKind.TEXT, title, text));
+  }
+
+  private void enqueueTask(String title, String text) {
+    if (!isNotBlank(text)) return;
+    dialogQueue.addLast(new DialogPage(PageKind.TASK, title, text));
+  }
+
+  private static boolean isNotBlank(String s) {
+    return s != null && !s.isBlank();
+  }
+
+  private void showNextDialogPage() {
+    DialogPage page = dialogQueue.pollFirst();
+
+    // If nothing queued: keep current page as-is (or disable editing if none)
+    if (page == null) {
+      if (currentDialogPage != null) {
+        applyDialogPage(currentDialogPage);
+      } else {
+        applyDialogPage(new DialogPage(PageKind.TEXT, "", ""));
+      }
       return;
     }
 
-    hintButton.setDisable(shownHintCount >= total);
-    if (shownHintCount >= total) {
-      hintButton.setText("No more hints");
-      hintStatusLabel.setText("(" + total + "/" + total + ")");
-    } else {
-      hintButton.setText("Show hint (" + (shownHintCount + 1) + "/" + total + ")");
-      hintStatusLabel.setText("(" + shownHintCount + "/" + total + ")");
-    }
+    currentDialogPage = page;
+    applyDialogPage(page);
   }
 
+  private void applyDialogPage(DialogPage page) {
+    setDialog(page.kind(), page.title(), page.text());
+  }
+
+  private void setDialog(PageKind kind, String title, String text) {
+    dialogTitleLabel.setText(title != null ? title : "");
+    dialogTextLabel.setText(text != null ? text : "");
+
+    boolean isTask = kind == PageKind.TASK;
+
+    // "Weiter" button only for non-task pages
+    dialogNextButton.setVisible(!isTask);
+    dialogNextButton.setManaged(!isTask);
+
+    // During TEXT pages: disable editor + submit; during TASK pages enable
+    codeTextArea.setDisable(!isTask);
+    submitButton.setDisable(!isTask);
+
+    // Hints only during TASK pages
+    if (isTask) updateHintUi();
+    else hintButton.setDisable(true);
+  }
+
+  @FXML
+  private void onDialogNextClicked() {
+    // Only exists for TEXT pages; TASK pages have button hidden.
+    showNextDialogPage();
+  }
+
+  // --------------------
+  // Submit / validate
+  // --------------------
   @FXML
   private void onSubmitClicked() {
     if (currentTask == null) {
       statusLabel.setText("No task loaded.");
+      return;
+    }
+    if (currentDialogPage == null || currentDialogPage.kind() != PageKind.TASK) {
+      statusLabel.setText("Not on a task page.");
       return;
     }
 
@@ -202,12 +309,12 @@ public final class MainController {
           System.err.println(run.stderr());
           return;
         }
-
         if (!validation.ok()) {
           statusLabel.setText("Failed: " + validation.message());
           return;
         }
 
+        // Optional: store name if present in stdout (Task 2 pattern)
         String maybeName = extractNameFromStdout(run.stdout());
         if (maybeName != null && playerId > 0) {
           try {
@@ -218,30 +325,63 @@ public final class MainController {
           }
         }
 
-        TaskDto next = taskRepo.findNextTaskInLevel(
-            currentTask.levelId(),
-            currentTask.orderIndex(),
-            currentTask.id()
-        );
-
-        if (next == null) {
-          statusLabel.setText("Success! No more tasks in this level.");
-          return;
-        }
-
-        currentTask = next;
-        showTask(currentTask);
-        statusLabel.setText("Success! Next task loaded.");
+        statusLabel.setText("Success!");
+        startDialogForTaskSuccessThenAdvance(currentTask);
       });
     });
   }
 
+  // --------------------
+  // Hints (only enabled in TASK pages)
+  // --------------------
+  @FXML
+  private void onHintClicked() {
+    if (currentTask == null) return;
+
+    if (shownHintCount < currentHints.size()) shownHintCount++;
+
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < shownHintCount; i++) {
+      if (i > 0) sb.append("\n\n");
+      sb.append("Hint ").append(i + 1).append(": ").append(currentHints.get(i));
+    }
+    hintsLabel.setText(sb.toString());
+
+    updateHintUi();
+  }
+
+  private void updateHintUi() {
+    int total = currentHints == null ? 0 : currentHints.size();
+
+    if (total == 0) {
+      hintButton.setDisable(true);
+      hintButton.setText("No hints");
+      hintStatusLabel.setText("");
+      return;
+    }
+
+    boolean isTaskPage = (currentDialogPage != null && currentDialogPage.kind() == PageKind.TASK);
+    boolean noMore = shownHintCount >= total;
+
+    hintButton.setDisable(!isTaskPage || noMore);
+
+    if (noMore) {
+      hintButton.setText("No more hints");
+      hintStatusLabel.setText("(" + total + "/" + total + ")");
+    } else {
+      hintButton.setText("Show hint (" + (shownHintCount + 1) + "/" + total + ")");
+      hintStatusLabel.setText("(" + shownHintCount + "/" + total + ")");
+    }
+  }
+
+  // --------------------
+  // Utility
+  // --------------------
   private static String extractNameFromStdout(String stdout) {
     if (stdout == null) return null;
 
     String normalized = stdout.replace("\r\n", "\n").trim();
     String[] lines = normalized.split("\n");
-
     if (lines.length < 2) return null;
 
     String line2 = lines[1].trim();

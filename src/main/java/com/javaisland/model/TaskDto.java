@@ -7,5 +7,7 @@ public record TaskDto(
     String description,
     int orderIndex,
     String validation,
-    String starterCode
+    String starterCode,
+    String story,
+    String successText
 ) {}

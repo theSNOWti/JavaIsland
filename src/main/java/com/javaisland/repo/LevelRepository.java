@@ -12,7 +12,7 @@ public final class LevelRepository {
 
   public LevelDto findFirstLevel() {
     String sql = """
-        SELECT id, code, title, order_index
+        SELECT id, code, title, order_index, intro_text, outro_text
         FROM level
         ORDER BY order_index ASC, id ASC
         LIMIT 1
@@ -28,7 +28,9 @@ public final class LevelRepository {
           rs.getLong("id"),
           rs.getString("code"),
           rs.getString("title"),
-          rs.getInt("order_index")
+          rs.getInt("order_index"),
+          rs.getString("intro_text"),
+          rs.getString("outro_text")
       );
     } catch (SQLException e) {
       throw new RuntimeException("DB error in LevelRepository.findFirstLevel", e);

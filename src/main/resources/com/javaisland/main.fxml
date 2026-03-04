@@ -8,80 +8,119 @@
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<BorderPane xmlns="http://javafx.com/javafx"
-            xmlns:fx="http://javafx.com/fxml"
-            fx:controller="com.javaisland.controller.MainController">
+<StackPane xmlns="http://javafx.com/javafx"
+           xmlns:fx="http://javafx.com/fxml"
+           fx:controller="com.javaisland.controller.MainController">
 
-  <top>
-    <HBox spacing="10">
-      <padding>
-        <Insets top="12" right="12" bottom="12" left="12"/>
-      </padding>
-      <Label text="JavaIsland" styleClass="title"/>
-      <HBox HBox.hgrow="ALWAYS"/>
-    </HBox>
-  </top>
+  <BorderPane fx:id="mainRoot">
 
-  <center>
-    <VBox spacing="10">
-      <padding>
-        <Insets top="18" right="18" bottom="18" left="18"/>
-      </padding>
-
-      <Label text="Level" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
-      <Label fx:id="levelTitleLabel" text="-" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
-
-      <Separator/>
-
-      <Label text="Task" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
-      <Label fx:id="taskTitleLabel" text="-" style="-fx-font-size: 16; -fx-font-weight: bold;"/>
-
-      <Label text="Instruction" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
-      <Label fx:id="instructionLabel" text="-" wrapText="true"/>
-
-      <!-- Hints -->
+    <top>
       <HBox spacing="10">
-        <Button fx:id="hintButton" text="Show hint" onAction="#onHintClicked"/>
-        <Label fx:id="hintStatusLabel" text="" style="-fx-opacity: 0.75;"/>
-      </HBox>
-
-      <ScrollPane fitToWidth="true" prefViewportHeight="140" pannable="true">
-        <content>
-          <Label fx:id="hintsLabel"
-                 text=""
-                 wrapText="true"
-                 style="-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.04); -fx-background-radius: 8;"/>
-        </content>
-      </ScrollPane>
-
-      <Separator/>
-
-      <Label text="Code" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
-      <TextArea fx:id="codeTextArea"
-                promptText="Write your code here..."
-                wrapText="false"
-                prefRowCount="14"
-                VBox.vgrow="ALWAYS"/>
-
-      <HBox spacing="10">
+        <padding>
+          <Insets top="12" right="12" bottom="12" left="12"/>
+        </padding>
+        <Label text="JavaIsland" styleClass="title"/>
         <HBox HBox.hgrow="ALWAYS"/>
-        <Button fx:id="submitButton" text="Submit" onAction="#onSubmitClicked"/>
       </HBox>
+    </top>
 
-    </VBox>
-  </center>
+    <center>
+      <VBox spacing="10">
+        <padding>
+          <Insets top="18" right="18" bottom="18" left="18"/>
+        </padding>
 
-  <bottom>
-    <HBox spacing="12">
-      <padding>
-        <Insets top="10" right="18" bottom="14" left="18"/>
-      </padding>
-      <Label text="Status:"/>
-      <Label fx:id="statusLabel" text="Loading..."/>
-    </HBox>
-  </bottom>
+        <Label text="Level" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
+        <Label fx:id="levelTitleLabel" text="-" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
 
-</BorderPane>
+        <Separator/>
+
+        <Label text="Task" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
+        <Label fx:id="taskTitleLabel" text="-" style="-fx-font-size: 16; -fx-font-weight: bold;"/>
+
+        <!-- Two columns: dialog (left) + work area (right) -->
+        <HBox spacing="16" VBox.vgrow="ALWAYS">
+
+          <!-- Left: Dialog panel (starts at hint height, ends at code bottom) -->
+          <VBox fx:id="dialogOverlay"
+                spacing="10"
+                prefWidth="360"
+                minWidth="280"
+                maxWidth="520"
+                style="-fx-background-color: rgba(0,0,0,0.75); -fx-padding: 16; -fx-background-radius: 12;"
+                VBox.vgrow="ALWAYS">
+            <Label fx:id="dialogTitleLabel"
+                  text="-"
+                  wrapText="true"
+                  style="-fx-text-fill: white; -fx-font-size: 16; -fx-font-weight: bold;"/>
+
+            <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS"
+                        style="-fx-background: transparent; -fx-background-color: transparent;">
+              <content>
+                <Label fx:id="dialogTextLabel"
+                      text=""
+                      wrapText="true"
+                      style="-fx-text-fill: white; -fx-padding: 4 0 0 0;"/>
+              </content>
+            </ScrollPane>
+
+            <HBox spacing="10">
+              <HBox HBox.hgrow="ALWAYS"/>
+              <Button fx:id="dialogNextButton" text="Weiter" onAction="#onDialogNextClicked"/>
+            </HBox>
+          </VBox>
+
+          <!-- Right: Hints + Code -->
+          <VBox spacing="10" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS">
+
+            <!-- Hints -->
+            <HBox spacing="10">
+              <Button fx:id="hintButton" text="Show hint" onAction="#onHintClicked"/>
+              <Label fx:id="hintStatusLabel" text="" style="-fx-opacity: 0.75;"/>
+            </HBox>
+
+            <ScrollPane fitToWidth="true" prefViewportHeight="140" pannable="true">
+              <content>
+                <Label fx:id="hintsLabel"
+                      text=""
+                      wrapText="true"
+                      style="-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.04); -fx-background-radius: 8;"/>
+              </content>
+            </ScrollPane>
+
+            <Separator/>
+
+            <Label text="Code" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
+            <TextArea fx:id="codeTextArea"
+                      promptText="Write your code here..."
+                      wrapText="false"
+                      prefRowCount="14"
+                      VBox.vgrow="ALWAYS"/>
+
+            <HBox spacing="10">
+              <HBox HBox.hgrow="ALWAYS"/>
+              <Button fx:id="submitButton" text="Submit" onAction="#onSubmitClicked"/>
+            </HBox>
+
+          </VBox>
+
+        </HBox>
+      </VBox>
+    </center>
+
+    <bottom>
+      <HBox spacing="12">
+        <padding>
+          <Insets top="10" right="18" bottom="14" left="18"/>
+        </padding>
+        <Label text="Status:"/>
+        <Label fx:id="statusLabel" text="Loading..."/>
+      </HBox>
+    </bottom>
+
+  </BorderPane>
+
+</StackPane>

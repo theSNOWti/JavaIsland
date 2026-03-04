@@ -6,11 +6,6 @@ import java.sql.*;
 
 public final class PlayerRepository {
 
-  /**
-   * Returns the "current" player:
-   * - if a player exists: the most recently played (fallback: newest created)
-   * - else: creates a new player row and returns its id
-   */
   public long ensureCurrentPlayerId() {
     Long id = findMostRecentPlayerId();
     if (id != null) return id;
@@ -21,7 +16,7 @@ public final class PlayerRepository {
     String sql = """
         UPDATE player
         SET name = ?,
-            last_played_at = CURRENT_TIMESTAMP
+            last_played_at = strftime('%s','now')
         WHERE id = ?
         """;
 
@@ -59,13 +54,13 @@ public final class PlayerRepository {
   private long createPlayer() {
     String sql = """
         INSERT INTO player(name, created_at, last_played_at)
-        VALUES(?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES(?, strftime('%s','now'), strftime('%s','now'))
         """;
 
     try (Connection c = Sqlite.open();
          PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-      ps.setString(1, ""); // start empty
+      ps.setString(1, "");
       ps.executeUpdate();
 
       try (ResultSet keys = ps.getGeneratedKeys()) {
