@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.javaisland.controller.MainController">
+
+  <top>
+    <HBox spacing="10">
+      <padding>
+        <Insets top="12" right="12" bottom="12" left="12"/>
+      </padding>
+      <Label text="JavaIsland" styleClass="title"/>
+      <HBox HBox.hgrow="ALWAYS"/>
+    </HBox>
+  </top>
+
+  <center>
+    <VBox spacing="10">
+      <padding>
+        <Insets top="18" right="18" bottom="18" left="18"/>
+      </padding>
+
+      <Label text="Level" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
+      <Label fx:id="levelTitleLabel" text="-" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+
+      <Separator/>
+
+      <Label text="Task" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
+      <Label fx:id="taskTitleLabel" text="-" style="-fx-font-size: 16; -fx-font-weight: bold;"/>
+
+      <Label text="Instruction" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
+      <Label fx:id="instructionLabel" text="-" wrapText="true"/>
+
+      <Separator/>
+
+      <Label text="Code" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
+      <TextArea fx:id="codeTextArea"
+                promptText="Write your code here..."
+                wrapText="false"
+                prefRowCount="14"
+                VBox.vgrow="ALWAYS"/>
+
+      <HBox spacing="10">
+        <HBox HBox.hgrow="ALWAYS"/>
+        <Button fx:id="submitButton" text="Submit" onAction="#onSubmitClicked"/>
+      </HBox>
+
+    </VBox>
+  </center>
+
+  <bottom>
+    <HBox spacing="12">
+      <padding>
+        <Insets top="10" right="18" bottom="14" left="18"/>
+      </padding>
+      <Label text="Status:"/>
+      <Label fx:id="statusLabel" text="Loading..."/>
+    </HBox>
+  </bottom>
+
+</BorderPane>
