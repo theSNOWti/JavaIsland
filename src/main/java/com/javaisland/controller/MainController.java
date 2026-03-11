@@ -8,6 +8,7 @@ import com.javaisland.model.TaskDto;
 import com.javaisland.repo.HintRepository;
 import com.javaisland.repo.LevelRepository;
 import com.javaisland.repo.PlayerRepository;
+import com.javaisland.repo.PlayerTaskResultRepository;
 import com.javaisland.repo.PlayerVarRepository;
 import com.javaisland.repo.TaskRepository;
 import com.javaisland.run.JavaRunner;
@@ -17,6 +18,7 @@ import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.VBox;
 
@@ -42,6 +44,9 @@ public final class MainController {
   @FXML private TextArea codeTextArea;
   @FXML private Button submitButton;
 
+  @FXML private ProgressBar progressBar;
+  @FXML private Label progressLabel;
+
   // --------------------
   // UI (dialog overlay - always visible)
   // --------------------
@@ -59,6 +64,7 @@ public final class MainController {
   private final ValidationEngine validationEngine = new ValidationEngine();
   private final PlayerRepository playerRepo = new PlayerRepository();
   private final PlayerVarRepository playerVarRepo = new PlayerVarRepository();
+  private final PlayerTaskResultRepository taskResultRepo = new PlayerTaskResultRepository();
 
   // --------------------
   // State
@@ -77,6 +83,8 @@ public final class MainController {
 
   private final Deque<DialogPage> dialogQueue = new ArrayDeque<>();
   private DialogPage currentDialogPage;
+
+  private int totalTasks = 0;
 
   /**
    * Optional callback which is invoked when the current dialog queue is exhausted
@@ -104,6 +112,7 @@ public final class MainController {
     codeTextArea.setDisable(true);
     submitButton.setDisable(true);
     hintButton.setDisable(true);
+    totalTasks = taskResultRepo.countAllTasks();
 
     Platform.runLater(() -> {
       try {
@@ -116,9 +125,26 @@ public final class MainController {
     });
   }
 
+  private void updateProgressUi() {
+    if (progressBar == null || progressLabel == null) return;
+
+    if (playerId <= 0 || totalTasks <= 0) {
+      progressBar.setProgress(0);
+      progressLabel.setText("");
+      return;
+    }
+
+    int done = taskResultRepo.countCompleted(playerId);
+    double pct = Math.max(0.0, Math.min(1.0, done * 1.0 / totalTasks));
+
+    progressBar.setProgress(pct);
+    progressLabel.setText(done + "/" + totalTasks + " (" + Math.round(pct * 100) + "%)");
+  }
+
   private void loadFirstLevelFirstTask() {
     try {
       currentLevel = levelRepo.findFirstLevel();
+      updateProgressUi();
       if (currentLevel == null) {
         statusLabel.setText("No levels found (SQLite table: level)");
         currentTask = null;
@@ -391,6 +417,8 @@ public final class MainController {
         tryPersistCapturedValue(currentTask, run.stdout());
 
         statusLabel.setText("Success!");
+        taskResultRepo.markCompleted(playerId, currentTask.id());
+        updateProgressUi();
         startDialogForTaskSuccessThenAdvance(currentTask);
       });
     });
@@ -409,24 +437,12 @@ public final class MainController {
         } catch (Exception e) {
           System.err.println("Failed to save player name: " + e.getMessage());
         }
-        // Note: do NOT return here; a task could also have capture_json.
       }
     }
 
-    // 2) Generic capture_json -> player_var
-    if (playerId > 0) {
-      String maybeName = extractPlayerNameFromStdout(stdout);
-      if (maybeName != null) {
-        try {
-          playerRepo.updatePlayerName(playerId, maybeName);
-        } catch (Exception e) {
-          System.err.println("Failed to save player name: " + e.getMessage());
-        }
-      }
-    }
-  
+    // 2) Task capture_json -> player_var (optional)
     if (playerId <= 0) return;
-  
+
     TaskCapture cap;
     try {
       cap = TaskCaptureExtractor.parse(task.captureJson());
@@ -435,10 +451,10 @@ public final class MainController {
       return;
     }
     if (cap == null) return;
-  
+
     String extracted = TaskCaptureExtractor.extractLastCapturedValue(stdout, cap.stdoutRegex());
     if (extracted == null) return;
-  
+
     var decision = CaptureModeEvaluator.evaluate(
         task.captureMode(),
         task.captureParams(),
@@ -447,13 +463,12 @@ public final class MainController {
         playerId,
         playerVarRepo
     );
-  
+
     if (!decision.shouldPersist()) {
-      // If you want capture failures to FAIL the task, return a boolean instead and handle it in onSubmitClicked.
       System.err.println("Capture skipped: " + decision.errorMessage());
       return;
     }
-  
+
     playerVarRepo.upsert(playerId, cap.key(), cap.type(), decision.finalValueText());
   }
 
