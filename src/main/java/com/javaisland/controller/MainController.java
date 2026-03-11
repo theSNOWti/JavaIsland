@@ -1,12 +1,17 @@
 package com.javaisland.controller;
 
+import com.javaisland.capture.CaptureModeEvaluator;
+import com.javaisland.capture.TaskCapture;
+import com.javaisland.capture.TaskCaptureExtractor;
 import com.javaisland.model.LevelDto;
 import com.javaisland.model.TaskDto;
 import com.javaisland.repo.HintRepository;
 import com.javaisland.repo.LevelRepository;
 import com.javaisland.repo.PlayerRepository;
+import com.javaisland.repo.PlayerVarRepository;
 import com.javaisland.repo.TaskRepository;
 import com.javaisland.run.JavaRunner;
+import com.javaisland.template.StarterCodeTemplate;
 import com.javaisland.validation.ValidationEngine;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -53,6 +58,7 @@ public final class MainController {
   private final HintRepository hintRepo = new HintRepository();
   private final ValidationEngine validationEngine = new ValidationEngine();
   private final PlayerRepository playerRepo = new PlayerRepository();
+  private final PlayerVarRepository playerVarRepo = new PlayerVarRepository();
 
   // --------------------
   // State
@@ -71,6 +77,13 @@ public final class MainController {
 
   private final Deque<DialogPage> dialogQueue = new ArrayDeque<>();
   private DialogPage currentDialogPage;
+
+  /**
+   * Optional callback which is invoked when the current dialog queue is exhausted
+   * and the user presses "Weiter" (i.e., there is no next page).
+   */
+  private Runnable dialogOnFinished;
+
   private boolean levelIntroAlreadyShown = false;
 
   private static final String DEFAULT_CODE = """
@@ -147,8 +160,12 @@ public final class MainController {
 
     // code
     String starter = (task.starterCode() != null && !task.starterCode().isBlank())
-        ? task.starterCode()
-        : DEFAULT_CODE;
+    ? task.starterCode()
+    : DEFAULT_CODE;
+
+    // NEW: resolve templates using player_var
+    starter = StarterCodeTemplate.resolve(starter, playerId, playerVarRepo);
+
     codeTextArea.setText(starter);
 
     // hints
@@ -174,8 +191,9 @@ public final class MainController {
   // --------------------
   private void startDialogForTaskStart(LevelDto level, TaskDto task) {
     dialogQueue.clear();
+    dialogOnFinished = null;
 
-    // Level intro should appear once per app run (as requested earlier)
+    // Level intro should appear once per app run
     if (!levelIntroAlreadyShown) {
       enqueueText("Prolog", level.introText());
       if (isNotBlank(level.introText())) levelIntroAlreadyShown = true;
@@ -189,6 +207,7 @@ public final class MainController {
 
   private void startDialogForTaskSuccessThenAdvance(TaskDto completedTask) {
     dialogQueue.clear();
+    dialogOnFinished = null;
 
     enqueueText("Erfolg", completedTask.successText());
 
@@ -205,7 +224,9 @@ public final class MainController {
       enqueueText(levelTitleLabel.getText(), currentTask.story());
       enqueueTask("Aufgabe", currentTask.description());
     } else {
+      // End of level: outro text, then advancing to next level when user clicks "Weiter"
       enqueueText("Abschluss", currentLevel != null ? currentLevel.outroText() : null);
+      dialogOnFinished = this::advanceToNextLevelOrEnd;
     }
 
     showNextDialogPage();
@@ -228,12 +249,12 @@ public final class MainController {
   private void showNextDialogPage() {
     DialogPage page = dialogQueue.pollFirst();
 
-    // If nothing queued: keep current page as-is (or disable editing if none)
     if (page == null) {
-      if (currentDialogPage != null) {
-        applyDialogPage(currentDialogPage);
-      } else {
-        applyDialogPage(new DialogPage(PageKind.TEXT, "", ""));
+      // Queue exhausted: perform finish action (if any) and stop.
+      if (dialogOnFinished != null) {
+        Runnable r = dialogOnFinished;
+        dialogOnFinished = null;
+        r.run();
       }
       return;
     }
@@ -271,6 +292,58 @@ public final class MainController {
     showNextDialogPage();
   }
 
+  private void advanceToNextLevelOrEnd() {
+    if (currentLevel == null) {
+      statusLabel.setText("No level loaded.");
+      setDialog(PageKind.TEXT, "Ende", "Kein Level geladen.");
+      return;
+    }
+
+    LevelDto nextLevel = levelRepo.findNextLevel(currentLevel.orderIndex(), currentLevel.id());
+    if (nextLevel == null) {
+      statusLabel.setText("All levels completed.");
+      setDialog(PageKind.TEXT, "Ende", "Du hast alle verfügbaren Level abgeschlossen.");
+
+      // no further pages -> no button
+      dialogNextButton.setVisible(false);
+      dialogNextButton.setManaged(false);
+
+      // lock editing because there's no next task
+      codeTextArea.setDisable(true);
+      submitButton.setDisable(true);
+      hintButton.setDisable(true);
+      return;
+    }
+
+    currentLevel = nextLevel;
+    levelTitleLabel.setText(
+        (currentLevel.title() != null && !currentLevel.title().isBlank())
+            ? currentLevel.title()
+            : currentLevel.code()
+    );
+
+    TaskDto firstTask = taskRepo.findFirstTaskOfLevel(currentLevel.id());
+    if (firstTask == null) {
+      statusLabel.setText("No tasks found for next level.");
+      showNoTask();
+      setDialog(PageKind.TEXT, "Fehler", "Keine Tasks für das nächste Level gefunden.");
+      return;
+    }
+
+    currentTask = firstTask;
+    showTask(currentTask);
+
+    // For a new level we should show its intro (even if levelIntroAlreadyShown is true for the previous level)
+    dialogQueue.clear();
+    dialogOnFinished = null;
+
+    enqueueText("Prolog", currentLevel.introText());
+    enqueueText(levelTitleLabel.getText(), currentTask.story());
+    enqueueTask("Aufgabe", currentTask.description());
+
+    showNextDialogPage();
+  }
+
   // --------------------
   // Submit / validate
   // --------------------
@@ -291,7 +364,7 @@ public final class MainController {
       String code = codeTextArea.getText() == null ? "" : codeTextArea.getText();
 
       var run = JavaRunner.compileAndRunMain(code, Duration.ofSeconds(2));
-      var validation = validationEngine.validate(currentTask.validation(), run);
+      var validation = validationEngine.validate(currentTask.validation(), run, code);
 
       Platform.runLater(() -> {
         if (!run.compiled()) {
@@ -314,21 +387,89 @@ public final class MainController {
           return;
         }
 
-        // Optional: store name if present in stdout (Task 2 pattern)
-        String maybeName = extractNameFromStdout(run.stdout());
-        if (maybeName != null && playerId > 0) {
-          try {
-            playerRepo.updatePlayerName(playerId, maybeName);
-          } catch (Exception e) {
-            statusLabel.setText("Success, but failed to save name: " + e.getMessage());
-            return;
-          }
-        }
+        // NEW: persist captured value (if capture_json exists)
+        tryPersistCapturedValue(currentTask, run.stdout());
 
         statusLabel.setText("Success!");
         startDialogForTaskSuccessThenAdvance(currentTask);
       });
     });
+  }
+
+  private void tryPersistCapturedValue(TaskDto task, String stdout) {
+    if (task == null) return;
+
+    // 1) Prolog special-case: store player name if present in stdout
+    // Format expected in stdout: "Mein Name ist <Name>"
+    if (playerId > 0) {
+      String maybeName = extractPlayerNameFromStdout(stdout);
+      if (maybeName != null) {
+        try {
+          playerRepo.updatePlayerName(playerId, maybeName);
+        } catch (Exception e) {
+          System.err.println("Failed to save player name: " + e.getMessage());
+        }
+        // Note: do NOT return here; a task could also have capture_json.
+      }
+    }
+
+    // 2) Generic capture_json -> player_var
+    if (playerId > 0) {
+      String maybeName = extractPlayerNameFromStdout(stdout);
+      if (maybeName != null) {
+        try {
+          playerRepo.updatePlayerName(playerId, maybeName);
+        } catch (Exception e) {
+          System.err.println("Failed to save player name: " + e.getMessage());
+        }
+      }
+    }
+  
+    if (playerId <= 0) return;
+  
+    TaskCapture cap;
+    try {
+      cap = TaskCaptureExtractor.parse(task.captureJson());
+    } catch (Exception e) {
+      System.err.println(e.getMessage());
+      return;
+    }
+    if (cap == null) return;
+  
+    String extracted = TaskCaptureExtractor.extractLastCapturedValue(stdout, cap.stdoutRegex());
+    if (extracted == null) return;
+  
+    var decision = CaptureModeEvaluator.evaluate(
+        task.captureMode(),
+        task.captureParams(),
+        cap,
+        extracted,
+        playerId,
+        playerVarRepo
+    );
+  
+    if (!decision.shouldPersist()) {
+      // If you want capture failures to FAIL the task, return a boolean instead and handle it in onSubmitClicked.
+      System.err.println("Capture skipped: " + decision.errorMessage());
+      return;
+    }
+  
+    playerVarRepo.upsert(playerId, cap.key(), cap.type(), decision.finalValueText());
+  }
+
+  private static String extractPlayerNameFromStdout(String stdout) {
+    if (stdout == null || stdout.isBlank()) return null;
+
+    String normalized = stdout.replace("\r\n", "\n");
+    for (String line : normalized.split("\n")) {
+      String t = line.trim();
+      String prefix = "Mein Name ist ";
+      if (!t.startsWith(prefix)) continue;
+
+      String name = t.substring(prefix.length()).trim();
+      if (!name.isBlank()) return name;
+    }
+    return null;
   }
 
   // --------------------
@@ -372,23 +513,5 @@ public final class MainController {
       hintButton.setText("Show hint (" + (shownHintCount + 1) + "/" + total + ")");
       hintStatusLabel.setText("(" + shownHintCount + "/" + total + ")");
     }
-  }
-
-  // --------------------
-  // Utility
-  // --------------------
-  private static String extractNameFromStdout(String stdout) {
-    if (stdout == null) return null;
-
-    String normalized = stdout.replace("\r\n", "\n").trim();
-    String[] lines = normalized.split("\n");
-    if (lines.length < 2) return null;
-
-    String line2 = lines[1].trim();
-    String prefix = "Mein Name ist ";
-    if (!line2.startsWith(prefix)) return null;
-
-    String name = line2.substring(prefix.length()).trim();
-    return name.isBlank() ? null : name;
   }
 }

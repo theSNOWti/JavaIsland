@@ -9,5 +9,8 @@ public record TaskDto(
     String validation,
     String starterCode,
     String story,
-    String successText
+    String successText,
+    String captureJson,
+    String captureMode,
+    String captureParams
 ) {}
