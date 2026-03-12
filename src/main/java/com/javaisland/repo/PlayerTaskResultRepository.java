@@ -27,27 +27,75 @@ public final class PlayerTaskResultRepository {
     }
   }
 
-  public int countCompleted(long playerId) {
-    String sql = "SELECT COUNT(*) AS cnt FROM player_task_result WHERE player_id = ? AND completed = 1";
+  private long prologueLevelId() {
+    String sql = """
+        SELECT id
+        FROM level
+        WHERE title = ?
+        ORDER BY id ASC
+        LIMIT 1
+        """;
+
+    try (Connection c = Sqlite.open();
+         PreparedStatement ps = c.prepareStatement(sql)) {
+      ps.setString(1, "Prolog");
+      try (ResultSet rs = ps.executeQuery()) {
+        if (!rs.next()) {
+          // If no prologue level exists, treat "no prologue" as "exclude nothing".
+          return -1L;
+        }
+        return rs.getLong("id");
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("DB error in PlayerTaskResultRepository.prologueLevelId", e);
+    }
+  }
+
+  public int countCompletedNonPrologue(long playerId) {
+    long prologueId = prologueLevelId();
+
+    String sql = """
+        SELECT COUNT(*) AS cnt
+        FROM player_task_result ptr
+        JOIN task t ON t.id = ptr.task_id
+        WHERE ptr.player_id = ?
+          AND ptr.completed = 1
+          AND (? < 0 OR t.level_id <> ?)
+        """;
+
     try (Connection c = Sqlite.open();
          PreparedStatement ps = c.prepareStatement(sql)) {
       ps.setLong(1, playerId);
+      ps.setLong(2, prologueId);
+      ps.setLong(3, prologueId);
+
       try (ResultSet rs = ps.executeQuery()) {
         return rs.next() ? rs.getInt("cnt") : 0;
       }
     } catch (SQLException e) {
-      throw new RuntimeException("DB error in PlayerTaskResultRepository.countCompleted", e);
+      throw new RuntimeException("DB error in PlayerTaskResultRepository.countCompletedNonPrologue", e);
     }
   }
 
-  public int countAllTasks() {
-    String sql = "SELECT COUNT(*) AS cnt FROM task";
+  public int countAllNonPrologueTasks() {
+    long prologueId = prologueLevelId();
+
+    String sql = """
+        SELECT COUNT(*) AS cnt
+        FROM task
+        WHERE (? < 0 OR level_id <> ?)
+        """;
+
     try (Connection c = Sqlite.open();
-         PreparedStatement ps = c.prepareStatement(sql);
-         ResultSet rs = ps.executeQuery()) {
-      return rs.next() ? rs.getInt("cnt") : 0;
+         PreparedStatement ps = c.prepareStatement(sql)) {
+      ps.setLong(1, prologueId);
+      ps.setLong(2, prologueId);
+
+      try (ResultSet rs = ps.executeQuery()) {
+        return rs.next() ? rs.getInt("cnt") : 0;
+      }
     } catch (SQLException e) {
-      throw new RuntimeException("DB error in PlayerTaskResultRepository.countAllTasks", e);
+      throw new RuntimeException("DB error in PlayerTaskResultRepository.countAllNonPrologueTasks", e);
     }
   }
 }

@@ -20,6 +20,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 
 import java.time.Duration;
@@ -31,8 +32,15 @@ import java.util.List;
 public final class MainController {
 
   // --------------------
+  // Prologue config
+  // --------------------
+  private static final long PROLOGUE_LEVEL_ID = 1;
+
+  // --------------------
   // UI (main)
   // --------------------
+  @FXML private BorderPane mainRoot;
+
   @FXML private Label statusLabel;
   @FXML private Label levelTitleLabel;
   @FXML private Label taskTitleLabel;
@@ -107,20 +115,19 @@ public final class MainController {
   // --------------------
   @FXML
   private void initialize() {
-    // dialogOverlay is always visible per requirement; we only change its content + button visibility.
-    // Disable editing until we hit a TASK page.
     codeTextArea.setDisable(true);
     submitButton.setDisable(true);
     hintButton.setDisable(true);
-    totalTasks = taskResultRepo.countAllTasks();
+
+    // IMPORTANT: Repo must also exclude PROLOGUE_LEVEL_ID (1), otherwise totalTasks is wrong.
+    totalTasks = taskResultRepo.countAllNonPrologueTasks();
+    updateProgressUi();
 
     Platform.runLater(() -> {
-      try {
-        playerId = playerRepo.ensureCurrentPlayerId();
-      } catch (Exception e) {
-        System.err.println("Failed to ensure player: " + e.getMessage());
-        playerId = 0;
-      }
+      // no player yet; create only after Prolog Task 2 (name).
+      playerId = 0;
+
+      updateProgressUi();
       loadFirstLevelFirstTask();
     });
   }
@@ -128,14 +135,24 @@ public final class MainController {
   private void updateProgressUi() {
     if (progressBar == null || progressLabel == null) return;
 
+    boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
+
+    // Hide during prologue
+    progressBar.setManaged(!inPrologue);
+    progressBar.setVisible(!inPrologue);
+    progressLabel.setManaged(!inPrologue);
+    progressLabel.setVisible(!inPrologue);
+
+    if (inPrologue) return;
+
     if (playerId <= 0 || totalTasks <= 0) {
-      progressBar.setProgress(0);
-      progressLabel.setText("");
+      progressBar.setProgress(0.0);
+      progressLabel.setText("0/" + Math.max(totalTasks, 0) + " (0%)");
       return;
     }
 
-    int done = taskResultRepo.countCompleted(playerId);
-    double pct = Math.max(0.0, Math.min(1.0, done * 1.0 / totalTasks));
+    int done = taskResultRepo.countCompletedNonPrologue(playerId);
+    double pct = Math.max(0.0, Math.min(1.0, (done * 1.0) / totalTasks));
 
     progressBar.setProgress(pct);
     progressLabel.setText(done + "/" + totalTasks + " (" + Math.round(pct * 100) + "%)");
@@ -145,6 +162,7 @@ public final class MainController {
     try {
       currentLevel = levelRepo.findFirstLevel();
       updateProgressUi();
+
       if (currentLevel == null) {
         statusLabel.setText("No levels found (SQLite table: level)");
         currentTask = null;
@@ -182,16 +200,18 @@ public final class MainController {
   // Task UI
   // --------------------
   private void showTask(TaskDto task) {
+    // Progress visibility can change when level changes, so refresh here too.
+    updateProgressUi();
+
     taskTitleLabel.setText(task.title() != null ? task.title() : "-");
 
     // code
     String starter = (task.starterCode() != null && !task.starterCode().isBlank())
-    ? task.starterCode()
-    : DEFAULT_CODE;
+        ? task.starterCode()
+        : DEFAULT_CODE;
 
-    // NEW: resolve templates using player_var
+    // resolve templates using player_var
     starter = StarterCodeTemplate.resolve(starter, playerId, playerVarRepo);
-
     codeTextArea.setText(starter);
 
     // hints
@@ -202,6 +222,8 @@ public final class MainController {
   }
 
   private void showNoTask() {
+    updateProgressUi();
+
     taskTitleLabel.setText("-");
     if (codeTextArea.getText() == null || codeTextArea.getText().isBlank()) {
       codeTextArea.setText(DEFAULT_CODE);
@@ -250,7 +272,6 @@ public final class MainController {
       enqueueText(levelTitleLabel.getText(), currentTask.story());
       enqueueTask("Aufgabe", currentTask.description());
     } else {
-      // End of level: outro text, then advancing to next level when user clicks "Weiter"
       enqueueText("Abschluss", currentLevel != null ? currentLevel.outroText() : null);
       dialogOnFinished = this::advanceToNextLevelOrEnd;
     }
@@ -276,7 +297,6 @@ public final class MainController {
     DialogPage page = dialogQueue.pollFirst();
 
     if (page == null) {
-      // Queue exhausted: perform finish action (if any) and stop.
       if (dialogOnFinished != null) {
         Runnable r = dialogOnFinished;
         dialogOnFinished = null;
@@ -314,7 +334,6 @@ public final class MainController {
 
   @FXML
   private void onDialogNextClicked() {
-    // Only exists for TEXT pages; TASK pages have button hidden.
     showNextDialogPage();
   }
 
@@ -330,11 +349,9 @@ public final class MainController {
       statusLabel.setText("All levels completed.");
       setDialog(PageKind.TEXT, "Ende", "Du hast alle verfügbaren Level abgeschlossen.");
 
-      // no further pages -> no button
       dialogNextButton.setVisible(false);
       dialogNextButton.setManaged(false);
 
-      // lock editing because there's no next task
       codeTextArea.setDisable(true);
       submitButton.setDisable(true);
       hintButton.setDisable(true);
@@ -359,7 +376,6 @@ public final class MainController {
     currentTask = firstTask;
     showTask(currentTask);
 
-    // For a new level we should show its intro (even if levelIntroAlreadyShown is true for the previous level)
     dialogQueue.clear();
     dialogOnFinished = null;
 
@@ -413,12 +429,18 @@ public final class MainController {
           return;
         }
 
-        // NEW: persist captured value (if capture_json exists)
+        // persist captured values + (possibly) create player via prologue name
         tryPersistCapturedValue(currentTask, run.stdout());
 
         statusLabel.setText("Success!");
-        taskResultRepo.markCompleted(playerId, currentTask.id());
-        updateProgressUi();
+
+        // Don't count prologue tasks in progress; also only if we have a player
+        boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
+        if (!inPrologue && playerId > 0) {
+          taskResultRepo.markCompleted(playerId, currentTask.id());
+          updateProgressUi();
+        }
+
         startDialogForTaskSuccessThenAdvance(currentTask);
       });
     });
@@ -429,15 +451,18 @@ public final class MainController {
 
     // 1) Prolog special-case: store player name if present in stdout
     // Format expected in stdout: "Mein Name ist <Name>"
-    if (playerId > 0) {
-      String maybeName = extractPlayerNameFromStdout(stdout);
-      if (maybeName != null) {
-        try {
-          playerRepo.updatePlayerName(playerId, maybeName);
-        } catch (Exception e) {
-          System.err.println("Failed to save player name: " + e.getMessage());
+    String maybeName = extractPlayerNameFromStdout(stdout);
+    if (maybeName != null) {
+      try {
+        if (playerId <= 0) {
+          playerId = playerRepo.createPlayer();
+          updateProgressUi(); // progress becomes visible once we're out of prologue
         }
+        playerRepo.updatePlayerName(playerId, maybeName);
+      } catch (Exception e) {
+        System.err.println("Failed to save player name: " + e.getMessage());
       }
+      // Note: do not return; task could also have capture_json later.
     }
 
     // 2) Task capture_json -> player_var (optional)
