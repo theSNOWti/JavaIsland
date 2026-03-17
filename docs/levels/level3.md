@@ -270,8 +270,6 @@ Core:
 Rückweg markiert.
 ```
 
----
-
 # Task 5 – Das Fragment wird gefunden
 Konzept: break
 

@@ -14,13 +14,21 @@ public final class JavaRunner {
 
   private JavaRunner() {}
 
+  // Backwards compatible
   public static RunResult compileAndRunMain(String userCode, Duration timeout) {
+    return compileAndRunMain(userCode, timeout, -1);
+  }
+
+  public static RunResult compileAndRunMain(String userCode, Duration timeout, long taskId) {
     Path tempDir = null;
 
     try {
       tempDir = Files.createTempDirectory("javaisland-");
+
+      String finalCode = augmentUserCodeForTask(userCode, taskId);
+
       Path src = tempDir.resolve("Main.java");
-      Files.writeString(src, userCode, StandardCharsets.UTF_8);
+      Files.writeString(src, finalCode, StandardCharsets.UTF_8);
 
       RunResult compile = compile(tempDir, src);
       if (!compile.compiled) return compile;
@@ -34,6 +42,67 @@ public final class JavaRunner {
         try { deleteRecursive(tempDir); } catch (Exception ignored) {}
       }
     }
+  }
+
+  /**
+   * Injects helper methods into class Main for specific tasks.
+   *
+   * IMPORTANT: This assumes the user's code contains "class Main" and compiles to Main.java/Main.class.
+   */
+  private static String augmentUserCodeForTask(String userCode, long taskId) {
+    if (userCode == null) userCode = "";
+
+    String helperBlock = helperMethodsForTask(taskId);
+    if (helperBlock == null || helperBlock.isBlank()) return userCode;
+
+    return injectIntoMainClass(userCode, helperBlock);
+  }
+
+  private static String helperMethodsForTask(long taskId) {
+    // Level 3 - Task 3
+    if (taskId == 14) {
+      // 5 steps, then peak reached
+      return """
+          
+          // --- injected by JavaIsland runner (do not edit) ---
+          static int __ji_step = 0;
+          static boolean isAtPeak() {
+              __ji_step++;
+              return __ji_step > 5;
+          }
+          // --- end injected ---
+          """;
+    }
+
+    // Level 3 - Task 5
+    if (taskId == 16) {
+      // Found on 6th check
+      return """
+          
+          // --- injected by JavaIsland runner (do not edit) ---
+          static int __ji_scan = 0;
+          static boolean fragmentFound() {
+              __ji_scan++;
+              return __ji_scan == 6;
+          }
+          // --- end injected ---
+          """;
+    }
+
+    return null;
+  }
+
+  private static String injectIntoMainClass(String userCode, String helperBlock) {
+    int classIdx = userCode.indexOf("class Main");
+    if (classIdx < 0) return userCode; // don't break other tasks
+
+    int braceIdx = userCode.indexOf('{', classIdx);
+    if (braceIdx < 0) return userCode;
+
+    // Insert directly after "class Main {"
+    return userCode.substring(0, braceIdx + 1)
+        + helperBlock
+        + userCode.substring(braceIdx + 1);
   }
 
   private static RunResult compile(Path outDir, Path javaFile) throws IOException {

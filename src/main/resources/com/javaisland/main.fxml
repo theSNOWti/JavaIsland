@@ -113,6 +113,7 @@
             <HBox spacing="10">
               <HBox HBox.hgrow="ALWAYS"/>
               <Button fx:id="submitButton" text="Submit" onAction="#onSubmitClicked"/>
+              <Button fx:id="skipButton" text="Skip" onAction="#onSkipClicked" />
             </HBox>
 
           </VBox>

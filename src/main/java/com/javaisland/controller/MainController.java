@@ -51,6 +51,7 @@ public final class MainController {
 
   @FXML private TextArea codeTextArea;
   @FXML private Button submitButton;
+  @FXML private Button skipButton;
 
   @FXML private Label scoreLabel;
   @FXML private ProgressBar progressBar;
@@ -334,6 +335,16 @@ public final class MainController {
     codeTextArea.setDisable(!isTask);
     submitButton.setDisable(!isTask);
 
+    if (skipButton != null) {
+      boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
+      boolean showSkip = isTask && !inPrologue;
+
+      skipButton.setVisible(showSkip);
+      skipButton.setManaged(showSkip);
+      // optional: also disable when hidden isn't necessary; but safe:
+      skipButton.setDisable(!showSkip);
+    }
+
     // Hints only during TASK pages
     if (isTask) updateHintUi();
     else hintButton.setDisable(true);
@@ -412,7 +423,7 @@ public final class MainController {
     Thread.startVirtualThread(() -> {
       String code = codeTextArea.getText() == null ? "" : codeTextArea.getText();
 
-      var run = JavaRunner.compileAndRunMain(code, Duration.ofSeconds(2));
+      var run = JavaRunner.compileAndRunMain(code, Duration.ofSeconds(2), currentTask.id());
       var validation = validationEngine.validate(currentTask.validation(), run, code);
 
       Platform.runLater(() -> {
@@ -459,6 +470,51 @@ public final class MainController {
         startDialogForTaskSuccessThenAdvance(currentTask);
       });
     });
+  }
+
+  @FXML
+  private void onSkipClicked() {
+    if (currentTask == null) {
+      statusLabel.setText("No task loaded.");
+      return;
+    }
+    if (currentDialogPage == null || currentDialogPage.kind() != PageKind.TASK) {
+      statusLabel.setText("Not on a task page.");
+      return;
+    }
+
+    boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
+    if (inPrologue) {
+      statusLabel.setText("Skip disabled in Prolog.");
+      return;
+    }
+
+    statusLabel.setText("Skipped.");
+
+    // Move to next task/level without awarding completion/score.
+    dialogQueue.clear();
+    dialogOnFinished = null;
+
+    enqueueText("Übersprungen", "Diese Aufgabe wurde übersprungen. Es gibt dafür keine Punkte.");
+
+    TaskDto next = taskRepo.findNextTaskInLevel(
+        currentTask.levelId(),
+        currentTask.orderIndex(),
+        currentTask.id()
+    );
+
+    if (next != null) {
+      currentTask = next;
+      showTask(currentTask);
+
+      enqueueText(levelTitleLabel.getText(), currentTask.story());
+      enqueueTask("Aufgabe", currentTask.description());
+    } else {
+      enqueueText("Abschluss", currentLevel != null ? currentLevel.outroText() : null);
+      dialogOnFinished = this::advanceToNextLevelOrEnd;
+    }
+
+    showNextDialogPage();
   }
 
   private void tryPersistCapturedValue(TaskDto task, String stdout) {

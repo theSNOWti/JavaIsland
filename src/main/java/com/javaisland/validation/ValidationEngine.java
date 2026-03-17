@@ -65,7 +65,7 @@ public final class ValidationEngine {
       }
 
       // --------------------
-      // NEW: source code validations
+      // source code validations
       // --------------------
       case "SRC_CONTAINS" -> {
         String v = rule.path("value").asText();
@@ -94,24 +94,74 @@ public final class ValidationEngine {
             ? new ValidationResult(true, "source matches expected pattern.")
             : new ValidationResult(false, "Expected source to match regex: " + pattern);
       }
+
+      // --------------------
+      // negative source regex
+      // --------------------
+      case "SRC_NOT_REGEX" -> {
+        String pattern = rule.path("pattern").asText();
+        String src = normalizedSource(sourceCode, rule);
+
+        if (pattern == null || pattern.isBlank()) {
+          yield new ValidationResult(false, "SRC_NOT_REGEX missing 'pattern'.");
+        }
+
+        Pattern p;
+        try {
+          p = Pattern.compile(pattern, Pattern.DOTALL);
+        } catch (Exception e) {
+          yield new ValidationResult(false, "Invalid SRC_NOT_REGEX pattern: " + e.getMessage());
+        }
+
+        yield !p.matcher(src).find()
+            ? new ValidationResult(true, "source does not match forbidden pattern.")
+            : new ValidationResult(false, "Expected source NOT to match regex: " + pattern);
+      }
+
+      // --------------------
+      // stdout validations
+      // --------------------
       case "RUN_STDOUT_REGEX" -> {
         String pattern = rule.path("pattern").asText();
         String out = (run.stdout() == null ? "" : run.stdout()).replace("\r\n", "\n");
-      
+
         if (pattern == null || pattern.isBlank()) {
           yield new ValidationResult(false, "RUN_STDOUT_REGEX missing 'pattern'.");
         }
-      
+
         Pattern p;
         try {
           p = Pattern.compile(pattern, Pattern.DOTALL | Pattern.MULTILINE);
         } catch (Exception e) {
           yield new ValidationResult(false, "Invalid RUN_STDOUT_REGEX pattern: " + e.getMessage());
         }
-      
+
         yield p.matcher(out).find()
             ? new ValidationResult(true, "stdout matches expected pattern.")
             : new ValidationResult(false, "Expected stdout to match regex: " + pattern);
+      }
+
+      // --------------------
+      // negative stdout regex
+      // --------------------
+      case "RUN_STDOUT_NOT_REGEX" -> {
+        String pattern = rule.path("pattern").asText();
+        String out = (run.stdout() == null ? "" : run.stdout()).replace("\r\n", "\n");
+
+        if (pattern == null || pattern.isBlank()) {
+          yield new ValidationResult(false, "RUN_STDOUT_NOT_REGEX missing 'pattern'.");
+        }
+
+        Pattern p;
+        try {
+          p = Pattern.compile(pattern, Pattern.DOTALL | Pattern.MULTILINE);
+        } catch (Exception e) {
+          yield new ValidationResult(false, "Invalid RUN_STDOUT_NOT_REGEX pattern: " + e.getMessage());
+        }
+
+        yield !p.matcher(out).find()
+            ? new ValidationResult(true, "stdout does not match forbidden pattern.")
+            : new ValidationResult(false, "Expected stdout NOT to match regex: " + pattern);
       }
 
       default -> new ValidationResult(false, "Unknown validation type: " + type);

@@ -211,9 +211,11 @@ Der Core kennt bereits Werte der Insel.
 Die Menge des Regens soll nicht fest sein,  
 sondern sich an einem vorhandenen Wert orientieren.
 
-Der Core entscheidet:  
+Der Core entscheidet:
+```
 Je mehr Bäume die Insel besitzt,  
 desto mehr Wasser benötigt der Fluss.
+```
 
 ## Anweisung
 >Rufe ``makeRain()`` mit der Variable trees auf.
