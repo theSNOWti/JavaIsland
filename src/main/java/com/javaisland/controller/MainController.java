@@ -52,6 +52,7 @@ public final class MainController {
   @FXML private TextArea codeTextArea;
   @FXML private Button submitButton;
 
+  @FXML private Label scoreLabel;
   @FXML private ProgressBar progressBar;
   @FXML private Label progressLabel;
 
@@ -133,7 +134,7 @@ public final class MainController {
   }
 
   private void updateProgressUi() {
-    if (progressBar == null || progressLabel == null) return;
+    if (progressBar == null || progressLabel == null || scoreLabel == null) return;
 
     boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
 
@@ -143,19 +144,25 @@ public final class MainController {
     progressLabel.setManaged(!inPrologue);
     progressLabel.setVisible(!inPrologue);
 
+    scoreLabel.setManaged(!inPrologue);
+    scoreLabel.setVisible(!inPrologue);
+
     if (inPrologue) return;
 
     if (playerId <= 0 || totalTasks <= 0) {
       progressBar.setProgress(0.0);
       progressLabel.setText("0/" + Math.max(totalTasks, 0) + " (0%)");
+      scoreLabel.setText("Score: 0");
       return;
     }
 
     int done = taskResultRepo.countCompletedNonPrologue(playerId);
     double pct = Math.max(0.0, Math.min(1.0, (done * 1.0) / totalTasks));
-
     progressBar.setProgress(pct);
     progressLabel.setText(done + "/" + totalTasks + " (" + Math.round(pct * 100) + "%)");
+
+    int totalScore = taskResultRepo.totalScoreNonPrologue(playerId);
+    scoreLabel.setText("Score: " + totalScore);
   }
 
   private void loadFirstLevelFirstTask() {
@@ -409,34 +416,42 @@ public final class MainController {
       var validation = validationEngine.validate(currentTask.validation(), run, code);
 
       Platform.runLater(() -> {
+        // ---- failure cases: count attempt (only if player exists and not prologue) ----
+        boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
+        boolean canTrack = (!inPrologue && playerId > 0);
+
         if (!run.compiled()) {
           statusLabel.setText("Compile error.");
           System.err.println(run.stderr());
+          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
           return;
         }
         if (run.message() != null && run.message().contains("timed out")) {
           statusLabel.setText("Timed out (possible infinite loop).");
           System.err.println(run.stderr());
+          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
           return;
         }
         if (run.exitCode() != 0) {
           statusLabel.setText("Runtime error (exit " + run.exitCode() + ").");
           System.err.println(run.stderr());
+          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
           return;
         }
         if (!validation.ok()) {
           statusLabel.setText("Failed: " + validation.message());
+          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
           return;
         }
 
-        // persist captured values + (possibly) create player via prologue name
+        // success: persist captured values + (possibly) create player via prologue name
         tryPersistCapturedValue(currentTask, run.stdout());
 
         statusLabel.setText("Success!");
 
-        // Don't count prologue tasks in progress; also only if we have a player
-        boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
+        // Save hint usage + mark completed (non-prologue only)
         if (!inPrologue && playerId > 0) {
+          taskResultRepo.setHintsUsed(playerId, currentTask.id(), shownHintCount);
           taskResultRepo.markCompleted(playerId, currentTask.id());
           updateProgressUi();
         }
