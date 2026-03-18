@@ -11,17 +11,26 @@ import com.javaisland.repo.PlayerRepository;
 import com.javaisland.repo.PlayerTaskResultRepository;
 import com.javaisland.repo.PlayerVarRepository;
 import com.javaisland.repo.TaskRepository;
+import com.javaisland.repo.TutorialRepository;
 import com.javaisland.run.JavaRunner;
 import com.javaisland.template.StarterCodeTemplate;
 import com.javaisland.validation.ValidationEngine;
+import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.parser.Parser;
+
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.scene.web.WebView;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -65,6 +74,8 @@ public final class MainController {
   @FXML private Label dialogTextLabel;
   @FXML private Button dialogNextButton;
 
+  @FXML private Button tutorialButton;
+
   // --------------------
   // Repos/Services
   // --------------------
@@ -75,6 +86,7 @@ public final class MainController {
   private final PlayerRepository playerRepo = new PlayerRepository();
   private final PlayerVarRepository playerVarRepo = new PlayerVarRepository();
   private final PlayerTaskResultRepository taskResultRepo = new PlayerTaskResultRepository();
+  private final TutorialRepository tutorialRepo = new TutorialRepository();
 
   // --------------------
   // State
@@ -93,6 +105,9 @@ public final class MainController {
 
   private final Deque<DialogPage> dialogQueue = new ArrayDeque<>();
   private DialogPage currentDialogPage;
+
+  private final Parser mdParser = Parser.builder().build();
+  private final HtmlRenderer mdRenderer = HtmlRenderer.builder().build();
 
   private int totalTasks = 0;
 
@@ -624,5 +639,97 @@ public final class MainController {
       hintButton.setText("Show hint (" + (shownHintCount + 1) + "/" + total + ")");
       hintStatusLabel.setText("(" + shownHintCount + "/" + total + ")");
     }
+  }
+
+  // --------------------
+  // Tutorial
+  // --------------------
+  @FXML
+  private void onTutorialClicked() {
+    if (currentLevel == null) return;
+
+    // Up to current level (by order_index). Prolog excluded in query.
+    List<TutorialRepository.TutorialRow> tutorials =
+        tutorialRepo.findTutorialsUpToLevel(currentLevel.orderIndex());
+
+    if (tutorials.isEmpty()) {
+      statusLabel.setText("No tutorials available yet.");
+      return;
+    }
+
+    showTutorialBookPopup(tutorials);
+  }
+
+  private void showTutorialBookPopup(List<TutorialRepository.TutorialRow> tutorials) {
+    Stage dialog = new Stage();
+    dialog.initModality(Modality.APPLICATION_MODAL);
+    dialog.setTitle("Tutorials");
+
+    WebView web = new WebView();
+
+    Label header = new Label();
+    header.setStyle("-fx-font-weight: bold; -fx-padding: 8;");
+
+    Button prev = new Button("←");
+    Button next = new Button("→");
+    Button close = new Button("Schließen");
+
+    final int[] idx = { tutorials.size() - 1 }; // open at current/latest by default
+
+    Runnable render = () -> {
+      var t = tutorials.get(idx[0]);
+      header.setText("Level " + t.levelOrderIndex() + ": " + (t.levelTitle() == null ? "" : t.levelTitle()));
+
+      String md = t.text() == null ? "" : t.text();
+      String html = markdownToHtml(md);
+
+      web.getEngine().loadContent(html);
+
+      prev.setDisable(idx[0] <= 0);
+      next.setDisable(idx[0] >= tutorials.size() - 1);
+    };
+
+    prev.setOnAction(e -> { idx[0]--; render.run(); });
+    next.setOnAction(e -> { idx[0]++; render.run(); });
+    close.setOnAction(e -> dialog.close());
+
+    HBox controls = new HBox(10, prev, next, new HBox(), close);
+    controls.setStyle("-fx-padding: 10;");
+    controls.getChildren().get(2).setStyle("-fx-hgrow: ALWAYS;"); // spacer hack-free would be Region; keep minimal
+
+    BorderPane root = new BorderPane();
+    root.setTop(header);
+    root.setCenter(web);
+    root.setBottom(controls);
+
+    Scene scene = new Scene(root, 720, 520);
+    dialog.setScene(scene);
+
+    render.run();
+    dialog.showAndWait();
+  }
+
+  private String markdownToHtml(String md) {
+    String body = mdRenderer.render(mdParser.parse(md == null ? "" : md));
+
+    // small default styling, including code blocks
+    String css = """
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; }
+        pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Courier New', monospace; }
+        pre { background: #111; color: #eee; padding: 10px; border-radius: 8px; overflow-x: auto; }
+        code { background: rgba(0,0,0,0.06); padding: 2px 4px; border-radius: 4px; }
+        h1,h2,h3 { margin-top: 1.2em; }
+        """;
+
+    return """
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8"/>
+            <style>%s</style>
+          </head>
+          <body>%s</body>
+        </html>
+        """.formatted(css, body);
   }
 }

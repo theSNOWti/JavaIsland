@@ -26,6 +26,8 @@
 
         <Label text="JavaIsland" styleClass="title"/>
 
+        <Button fx:id="tutorialButton" text="Tutorial" onAction="#onTutorialClicked"/>
+
         <HBox HBox.hgrow="ALWAYS"/>
 
         <!-- Progress (right side) -->
