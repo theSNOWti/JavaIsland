@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public final class LevelRepository {
@@ -94,6 +96,27 @@ public final class LevelRepository {
       return Optional.of(mapRow(rs));
     } catch (SQLException e) {
       throw new RuntimeException("DB error in LevelRepository.findLastNonPrologueLevel", e);
+    }
+  }
+
+  public List<LevelDto> findAllNonPrologueOrdered() {
+    String sql = """
+        SELECT id, code, title, order_index, intro_text, outro_text
+        FROM level
+        WHERE title <> 'Prolog'
+        ORDER BY order_index ASC, id ASC
+        """;
+
+    try (Connection c = Sqlite.open();
+         PreparedStatement ps = c.prepareStatement(sql);
+         ResultSet rs = ps.executeQuery()) {
+
+      List<LevelDto> out = new ArrayList<>();
+      while (rs.next()) out.add(mapRow(rs));
+      return out;
+
+    } catch (SQLException e) {
+      throw new RuntimeException("DB error in LevelRepository.findAllNonPrologueOrdered", e);
     }
   }
 

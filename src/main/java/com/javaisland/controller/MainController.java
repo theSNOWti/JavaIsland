@@ -784,4 +784,37 @@ public final class MainController {
     showNoTask();
     setDialog(PageKind.TEXT, "Fertig", "Du hast alle verfügbaren Level abgeschlossen.");
   }
+
+  public void startAtLevel(long playerId, long levelId) {
+    this.autoStartEnabled = false;
+    this.playerId = playerId;
+
+    this.currentLevel = levelRepo.findById(levelId).orElse(null);
+    if (currentLevel == null) {
+      statusLabel.setText("Level not found: " + levelId);
+      showNoTask();
+      setDialog(PageKind.TEXT, "Fehler", "Level nicht gefunden.");
+      return;
+    }
+
+    // update title
+    levelTitleLabel.setText(
+        (currentLevel.title() != null && !currentLevel.title().isBlank())
+            ? currentLevel.title()
+            : currentLevel.code()
+    );
+
+    this.currentTask = taskRepo.findFirstTaskOfLevel(levelId);
+    if (currentTask == null) {
+      statusLabel.setText("No tasks found for level " + levelId);
+      showNoTask();
+      setDialog(PageKind.TEXT, "Fehler", "Keine Tasks für dieses Level gefunden.");
+      return;
+    }
+
+    showTask(currentTask);
+    startDialogForTaskStart(currentLevel, currentTask);
+    updateProgressUi();
+    statusLabel.setText("Ready.");
+  }
 }

@@ -7,30 +7,31 @@ import java.util.OptionalLong;
 
 public final class PlayerRepository {
 
-  /**
-   * Create a new player row and return its id.
-   * Player gets its name later (Prolog Task 2).
-   */
-  public long createPlayer() {
-    String sql = """
-        INSERT INTO player(name, created_at, last_played_at)
-        VALUES(?, strftime('%s','now'), strftime('%s','now'))
-        """;
-
-    try (Connection c = Sqlite.open();
-         PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
-      ps.setString(1, "");
-      ps.executeUpdate();
-
-      try (ResultSet keys = ps.getGeneratedKeys()) {
-        if (!keys.next()) throw new SQLException("No generated key returned for player insert");
-        return keys.getLong(1);
+    public long createPlayer() {
+        return createPlayer("Player-" + System.currentTimeMillis());
       }
-    } catch (SQLException e) {
-      throw new RuntimeException("DB error in PlayerRepository.createPlayer", e);
-    }
-  }
+    
+      public long createPlayer(String name) {
+        String sql = """
+            INSERT INTO player(name, created_at, last_played_at)
+            VALUES(?, datetime('now'), datetime('now'))
+            """;
+    
+        try (var c = Sqlite.open();
+             var ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+    
+          ps.setString(1, name);
+          ps.executeUpdate();
+    
+          try (var keys = ps.getGeneratedKeys()) {
+            if (keys.next()) return keys.getLong(1);
+          }
+          throw new java.sql.SQLException("No generated key returned for player insert.");
+    
+        } catch (Exception e) {
+          throw new RuntimeException("DB error in PlayerRepository.createPlayer", e);
+        }
+      }
 
   public void updatePlayerName(long playerId, String name) {
     String sql = """
@@ -48,6 +49,16 @@ public final class PlayerRepository {
       ps.executeUpdate();
     } catch (SQLException e) {
       throw new RuntimeException("DB error in PlayerRepository.updatePlayerName", e);
+    }
+  }
+
+  public void touchLastPlayed(long playerId) {
+    String sql = "UPDATE player SET last_played_at = datetime('now') WHERE id = ?";
+    try (var c = Sqlite.open(); var ps = c.prepareStatement(sql)) {
+      ps.setLong(1, playerId);
+      ps.executeUpdate();
+    } catch (Exception e) {
+      throw new RuntimeException("DB error in PlayerRepository.touchLastPlayed", e);
     }
   }
 
