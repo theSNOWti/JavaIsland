@@ -119,6 +119,8 @@ public final class MainController {
 
   private boolean levelIntroAlreadyShown = false;
 
+  private boolean autoStartEnabled = true;
+
   private static final String DEFAULT_CODE = """
       public class Main {
           public static void main(String[] args) {
@@ -136,11 +138,12 @@ public final class MainController {
     submitButton.setDisable(true);
     hintButton.setDisable(true);
 
-    // IMPORTANT: Repo must also exclude PROLOGUE_LEVEL_ID (1), otherwise totalTasks is wrong.
     totalTasks = taskResultRepo.countAllNonPrologueTasks();
     updateProgressUi();
 
     Platform.runLater(() -> {
+      if (!autoStartEnabled) return; // NEW
+
       // no player yet; create only after Prolog Task 2 (name).
       playerId = 0;
 
@@ -731,5 +734,54 @@ public final class MainController {
           <body>%s</body>
         </html>
         """.formatted(css, body);
+  }
+
+  public void startLoadedGame(long loadedPlayerId) {
+    this.autoStartEnabled = false;
+
+    this.playerId = loadedPlayerId;
+
+    var maybeTask = taskRepo.findFirstUncompletedNonPrologue(playerId);
+
+    if (maybeTask.isPresent()) {
+      TaskDto task = maybeTask.get();
+
+      this.currentTask = task;
+      this.currentLevel = levelRepo.findById(task.levelId()).orElse(null);
+
+      if (currentLevel == null) {
+        statusLabel.setText("Load failed: level not found for task " + task.id());
+        showNoTask();
+        setDialog(PageKind.TEXT, "Fehler", "Level zum Spielstand nicht gefunden.");
+        return;
+      }
+
+      levelTitleLabel.setText(
+          (currentLevel.title() != null && !currentLevel.title().isBlank())
+              ? currentLevel.title()
+              : currentLevel.code()
+      );
+
+      showTask(task);
+      startDialogForTaskStart(currentLevel, task);
+      updateProgressUi();
+      statusLabel.setText("Loaded.");
+      return;
+    }
+
+    this.currentLevel = levelRepo.findLastNonPrologueLevel().orElse(null);
+    this.currentTask = null;
+
+    if (currentLevel != null) {
+      levelTitleLabel.setText(
+          (currentLevel.title() != null && !currentLevel.title().isBlank())
+              ? currentLevel.title()
+              : currentLevel.code()
+      );
+    }
+
+    updateProgressUi();
+    showNoTask();
+    setDialog(PageKind.TEXT, "Fertig", "Du hast alle verfügbaren Level abgeschlossen.");
   }
 }

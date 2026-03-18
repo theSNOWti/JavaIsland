@@ -7,6 +7,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Optional;
 
 public final class TaskRepository {
 
@@ -57,6 +58,32 @@ public final class TaskRepository {
       }
     } catch (SQLException e) {
       throw new RuntimeException("DB error in TaskRepository.findNextTaskInLevel", e);
+    }
+  }
+
+  public Optional<TaskDto> findFirstUncompletedNonPrologue(long playerId) {
+    String sql = """
+        SELECT t.*
+        FROM task t
+        JOIN level l ON l.id = t.level_id
+        LEFT JOIN player_task_result ptr
+          ON ptr.task_id = t.id AND ptr.player_id = ?
+        WHERE l.title <> 'Prolog'
+          AND COALESCE(ptr.completed, 0) <> 1
+        ORDER BY l.order_index ASC, t.order_index ASC, t.id ASC
+        LIMIT 1
+        """;
+
+    try (Connection c = Sqlite.open();
+         PreparedStatement ps = c.prepareStatement(sql)) {
+      ps.setLong(1, playerId);
+
+      try (ResultSet rs = ps.executeQuery()) {
+        if (!rs.next()) return Optional.empty();
+        return Optional.of(mapRow(rs));
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("DB error in TaskRepository.findFirstUncompletedNonPrologue", e);
     }
   }
 

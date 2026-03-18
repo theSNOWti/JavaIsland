@@ -10,7 +10,7 @@ public final class MainApp extends Application {
 
   @Override
   public void start(Stage stage) throws Exception {
-    var fxml = new FXMLLoader(MainApp.class.getResource("/com/javaisland/main.fxml"));
+    var fxml = new FXMLLoader(MainApp.class.getResource("/com/javaisland/menu.fxml"));
     Parent root = fxml.load();
 
     var scene = new Scene(root, 900, 600);

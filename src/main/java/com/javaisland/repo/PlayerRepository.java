@@ -3,6 +3,7 @@ package com.javaisland.repo;
 import com.javaisland.db.Sqlite;
 
 import java.sql.*;
+import java.util.OptionalLong;
 
 public final class PlayerRepository {
 
@@ -47,6 +48,20 @@ public final class PlayerRepository {
       ps.executeUpdate();
     } catch (SQLException e) {
       throw new RuntimeException("DB error in PlayerRepository.updatePlayerName", e);
+    }
+  }
+
+  public OptionalLong findLastPlayerId() {
+    String sql = "SELECT id FROM player ORDER BY id DESC LIMIT 1";
+    try (Connection c = Sqlite.open();
+         PreparedStatement ps = c.prepareStatement(sql);
+         ResultSet rs = ps.executeQuery()) {
+
+      if (rs.next()) return OptionalLong.of(rs.getLong(1));
+      return OptionalLong.empty();
+
+    } catch (SQLException e) {
+      throw new RuntimeException("DB error in PlayerRepository.findLastPlayerId", e);
     }
   }
 }
