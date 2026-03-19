@@ -12,5 +12,6 @@ public record TaskDto(
     String successText,
     String captureJson,
     String captureMode,
-    String captureParams
+    String captureParams,
+    String backgroundImage
 ) {}

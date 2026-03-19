@@ -3,22 +3,41 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox xmlns:fx="http://javafx.com/fxml"
-      fx:controller="com.javaisland.controller.MenuController"
-      alignment="CENTER"
-      spacing="14">
+<StackPane xmlns:fx="http://javafx.com/fxml"
+           fx:controller="com.javaisland.controller.MenuController"
+           fx:id="menuRoot">
 
-    <padding>
+    <!-- Background image -->
+    <ImageView fx:id="backgroundImageView"
+                pickOnBounds="false"
+                preserveRatio="false"
+                smooth="true">
+        <image>
+        <Image url="@images/JavaIsland0.png"/>
+        </image>
+    </ImageView>
+
+    <!-- Foreground menu content -->
+    <VBox fx:id="menuContent"
+            alignment="CENTER"
+            spacing="14">
+        <padding>
         <Insets top="40" right="40" bottom="40" left="40"/>
-    </padding>
+        </padding>
 
-    <Label text="JavaIsland" style="-fx-font-size: 28px; -fx-font-weight: bold;"/>
+        <Label text="JavaIsland"
+               style="-fx-text-fill: #F2F4F8; -fx-font-size: 28px; -fx-font-weight: bold;
+                      -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.75), 10, 0.35, 0, 1);"/>
 
-    <Button text="Neues Spiel" onAction="#onNewGameClicked" prefWidth="220"/>
-    <Button text="Spiel laden" onAction="#onLoadGameClicked" prefWidth="220"/>
-    <Button text="Levelauswahl" onAction="#onLevelSelectClicked" prefWidth="220"/>
+        <Button text="Neues Spiel" onAction="#onNewGameClicked" prefWidth="220"/>
+        <Button text="Spiel laden" onAction="#onLoadGameClicked" prefWidth="220"/>
+        <Button text="Levelauswahl" onAction="#onLevelSelectClicked" prefWidth="220"/>
 
-    <Label fx:id="statusLabel" text="" style="-fx-opacity: 0.75;"/>
-</VBox>
+        <Label fx:id="statusLabel" text="" style="-fx-opacity: 0.75;"/>
+    </VBox>
+</StackPane>

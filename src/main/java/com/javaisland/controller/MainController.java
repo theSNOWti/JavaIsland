@@ -28,6 +28,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -41,7 +42,9 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class MainController {
 
@@ -120,6 +123,12 @@ public final class MainController {
 
   private int totalTasks = 0;
 
+  private static final String BG_BASE = "/com/javaisland/images/";
+  private static final String DEFAULT_BG = "JavaIsland0.png";
+
+  private final Map<String, Image> bgCache = new HashMap<>();
+  private String currentBgKey;
+
   /**
    * Optional callback which is invoked when the current dialog queue is exhausted
    * and the user presses "Weiter" (i.e., there is no next page).
@@ -147,6 +156,8 @@ public final class MainController {
     submitButton.setDisable(true);
     hintButton.setDisable(true);
 
+    setBackgroundFromDbValue(DEFAULT_BG);
+
     if (mainRoot != null && backgroundImageView != null) {
       backgroundImageView.fitWidthProperty().bind(mainRoot.widthProperty());
       backgroundImageView.fitHeightProperty().bind(mainRoot.heightProperty());
@@ -167,6 +178,40 @@ public final class MainController {
     });
 
     setupGlassFocus();
+  }
+
+  private void applyTaskBackground(TaskDto task) {
+    if (task == null) return;
+
+    String dbVal = task.backgroundImage();
+    if (dbVal == null || dbVal.isBlank()) return; // keep current background
+
+    setBackgroundFromDbValue(dbVal.trim());
+  }
+
+  private void setBackgroundFromDbValue(String dbVal) {
+    if (backgroundImageView == null) return;
+    if (dbVal == null || dbVal.isBlank()) return;
+
+    // allow absolute resource path OR file name
+    String resourcePath = dbVal.startsWith("/") ? dbVal : (BG_BASE + dbVal);
+
+    // avoid redundant reloads
+    if (resourcePath.equals(currentBgKey)) return;
+
+    Image img = bgCache.get(resourcePath);
+    if (img == null) {
+      var url = MainController.class.getResource(resourcePath);
+      if (url == null) {
+        System.err.println("Background image not found: " + resourcePath);
+        return;
+      }
+      img = new Image(url.toExternalForm(), true);
+      bgCache.put(resourcePath, img);
+    }
+
+    backgroundImageView.setImage(img);
+    currentBgKey = resourcePath;
   }
 
   private void setupGlassFocus() {
@@ -506,6 +551,7 @@ public final class MainController {
   private void showTask(TaskDto task) {
     updateProgressUi();
     updateTutorialButtonState();
+    applyTaskBackground(task);
 
     taskTitleLabel.setText(task.title() != null ? task.title() : "-");
 

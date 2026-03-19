@@ -13,7 +13,7 @@ public final class TaskRepository {
 
   public TaskDto findFirstTaskOfLevel(long levelId) {
     String sql = """
-        SELECT id, level_id, title, description, order_index, validation, code, story, success_text, capture_json, capture_mode, capture_params
+        SELECT id, level_id, title, description, order_index, validation, code, story, success_text, capture_json, capture_mode, capture_params, background_image
         FROM task
         WHERE level_id = ?
         ORDER BY order_index ASC, id ASC
@@ -36,7 +36,7 @@ public final class TaskRepository {
 
   public TaskDto findNextTaskInLevel(long levelId, int currentOrderIndex, long currentTaskId) {
     String sql = """
-        SELECT id, level_id, title, description, order_index, validation, code, story, success_text, capture_json, capture_mode, capture_params
+        SELECT id, level_id, title, description, order_index, validation, code, story, success_text, capture_json, capture_mode, capture_params, background_image
         FROM task
         WHERE level_id = ?
           AND (order_index > ? OR (order_index = ? AND id > ?))
@@ -100,7 +100,8 @@ public final class TaskRepository {
       rs.getString("success_text"),
       rs.getString("capture_json"),
       rs.getString("capture_mode"),
-      rs.getString("capture_params")
+      rs.getString("capture_params"),
+      rs.getString("background_image")
     );
   }
 }

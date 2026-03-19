@@ -10,16 +10,29 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 public final class MenuController {
 
+  @FXML private StackPane menuRoot;
+  @FXML private ImageView backgroundImageView;
   @FXML private Label statusLabel;
 
   private final PlayerRepository playerRepo = new PlayerRepository();
   private final LevelRepository levelRepo = new LevelRepository();
+
+  @FXML
+  private void initialize() {
+    // ensure background fills the whole menu
+    if (menuRoot != null && backgroundImageView != null) {
+      backgroundImageView.fitWidthProperty().bind(menuRoot.widthProperty());
+      backgroundImageView.fitHeightProperty().bind(menuRoot.heightProperty());
+    }
+  }
 
   @FXML
   private void onNewGameClicked() {
