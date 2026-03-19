@@ -269,6 +269,195 @@ public final class MainController {
     scoreLabel.setText("Score: " + totalScore);
   }
 
+  private enum StatusKind { INFO, SUCCESS, WARNING, ERROR }
+
+  private void setStatus(StatusKind kind, String userMessage) {
+    if (statusLabel == null) return;
+
+    statusLabel.setText(userMessage == null ? "" : userMessage);
+
+    // Optional: color-code (works even without CSS)
+    String color = switch (kind) {
+      case SUCCESS -> "#B7F5C5";
+      case WARNING -> "#FFE08A";
+      case ERROR -> "#FFB3B3";
+      default -> "#F2F4F8";
+    };
+    statusLabel.setStyle("-fx-text-fill: " + color + ";");
+  }
+
+  /**
+   * Produces a short, user-readable message from an exception
+   * without printing the whole stack trace to the UI.
+   *
+   * Examples:
+   * - "NullPointerException: x was null"
+   * - "SQLException: NOT NULL constraint failed: player.created_at"
+   *
+   * If the exception has no message, falls back to the exception class simple name.
+   */
+  private static String exceptionSummary(Throwable e) {
+    if (e == null) return "Unbekannter Fehler.";
+
+    String msg = e.getMessage();
+    msg = (msg == null) ? "" : msg.trim();
+
+    String type = e.getClass().getSimpleName();
+    if (msg.isBlank()) return type;
+
+    // Avoid repeating "Type: Type: message" patterns
+    if (msg.startsWith(type + ":")) return msg;
+
+    return type + ": " + msg;
+  }
+
+  /**
+   * If you want the "message of the stacktrace" but not the full trace,
+   * often the root cause message is the most relevant.
+   */
+  private static Throwable rootCause(Throwable e) {
+    if (e == null) return null;
+
+    Throwable cur = e;
+    // guard against cycles just in case
+    for (int i = 0; i < 32 && cur.getCause() != null && cur.getCause() != cur; i++) {
+      cur = cur.getCause();
+    }
+    return cur;
+  }
+
+  private String formatValidationMessage(String raw) {
+    if (raw == null || raw.isBlank()) return "Das Ergebnis ist leider noch nicht korrekt.";
+
+    String m = raw.trim();
+
+    if (m.toLowerCase().contains("expected") || m.toLowerCase().contains("regex")) {
+      return "Die Ausgabe stimmt noch nicht ganz. Prüfe Format und Inhalt der Ausgabe.";
+    }
+    if (m.toLowerCase().contains("nullpointer")) {
+      return "Da ist etwas schiefgelaufen (Null-Wert). Prüfe Variablen und Rückgabewerte.";
+    }
+    if (m.toLowerCase().contains("assert")) {
+      return "Die Aufgabe ist noch nicht erfüllt. Schau dir die Anforderungen nochmal an.";
+    }
+    return "Fast! " + m;
+  }
+
+  /**
+   * Compile errors are not Exceptions here (javac output), so we parse stderr
+   * to show the first meaningful error line (like "Zeile 3: ...").
+   */
+  private String formatCompileError(String stderr) {
+    // Always try to show something meaningful in the UI.
+    String summary = extractJavacErrorSummaryWithContext(stderr);
+    if (summary != null && !summary.isBlank()) return summary;
+
+    // Absolute fallback: show first lines of stderr (still in UI)
+    return firstNonBlankLines(stderr, 3);
+  }
+
+  /**
+   * Extracts a short javac error message for the UI.
+   * Includes line number if available and (if present) the source line + caret marker.
+   *
+   * Example:
+   *   "Zeile 3: incompatible types: String cannot be converted to int
+   *    int trees = "34";
+   *                ^"
+   */
+  private static String extractJavacErrorSummaryWithContext(String stderr) {
+    if (stderr == null || stderr.isBlank()) return null;
+
+    String s = stderr.replace("\r\n", "\n");
+    String[] lines = s.split("\n");
+
+    for (int i = 0; i < lines.length; i++) {
+      String line = lines[i].trim();
+      if (line.isBlank()) continue;
+
+      // Primary error line patterns:
+      // 1) "Main.java:3: error: <msg>"
+      // 2) "error: <msg>"
+      Integer lineNo = null;
+      String msg = null;
+
+      int errIdx = line.indexOf(": error:");
+      if (errIdx >= 0) {
+        msg = line.substring(errIdx + ": error:".length()).trim();
+
+        String beforeError = line.substring(0, errIdx);
+        // expect "...:<line>:"
+        int lastColon = beforeError.lastIndexOf(':');
+        if (lastColon >= 0) {
+          int prevColon = beforeError.lastIndexOf(':', lastColon - 1);
+          if (prevColon >= 0) {
+            String maybeNum = beforeError.substring(prevColon + 1, lastColon).trim();
+            try { lineNo = Integer.parseInt(maybeNum); } catch (NumberFormatException ignored) {}
+          }
+        }
+      } else if (line.startsWith("error:")) {
+        msg = line.substring("error:".length()).trim();
+      }
+
+      if (msg == null || msg.isBlank()) continue;
+
+      StringBuilder out = new StringBuilder();
+      if (lineNo != null) out.append("Zeile ").append(lineNo).append(": ");
+      out.append(msg);
+
+      // Try to include source line + caret if present (usually next 1-2 lines)
+      String srcLine = (i + 1 < lines.length) ? lines[i + 1] : null;
+      String caretLine = (i + 2 < lines.length) ? lines[i + 2] : null;
+
+      boolean hasCaret = caretLine != null && caretLine.trim().equals("^");
+      if (srcLine != null && !srcLine.trim().isBlank() && hasCaret) {
+        out.append("\n").append(srcLine.stripTrailing());
+        out.append("\n").append(caretLine.stripTrailing());
+      }
+
+      return out.toString();
+    }
+
+    return null;
+  }
+
+  private static String firstNonBlankLines(String text, int maxLines) {
+    if (text == null || text.isBlank()) return "Kompilierfehler.";
+
+    String s = text.replace("\r\n", "\n");
+    String[] lines = s.split("\n");
+
+    StringBuilder out = new StringBuilder();
+    int added = 0;
+
+    for (String raw : lines) {
+      String line = raw.stripTrailing();
+      if (line.isBlank()) continue;
+
+      if (out.length() > 0) out.append("\n");
+      out.append(line);
+
+      added++;
+      if (added >= maxLines) break;
+    }
+
+    return out.length() == 0 ? "Kompilierfehler." : out.toString();
+  }
+
+  private String formatRuntimeError(int exitCode) {
+    return "Beim Ausführen ist ein Fehler passiert. Prüfe Exceptions und Logik.";
+  }
+
+  /**
+   * Convenience method if you want to display "the exception message"
+   * (root cause) in the status bar.
+   */
+  private void setStatusFromException(StatusKind kind, String prefix, Throwable e) {
+    Throwable rc = rootCause(e);
+    String summary = exceptionSummary(rc);
+    setStatus(kind, (prefix == null || prefix.isBlank()) ? summary : (prefix + ": " + summary));
+  }
+
   private void loadFirstLevelFirstTask() {
     try {
       currentLevel = levelRepo.findFirstLevel();
@@ -276,7 +465,7 @@ public final class MainController {
       updateTutorialButtonState();
 
       if (currentLevel == null) {
-        statusLabel.setText("No levels found (SQLite table: level)");
+        setStatus(StatusKind.ERROR, "Keine Level gefunden.");
         currentTask = null;
         codeTextArea.setText(DEFAULT_CODE);
         setDialog(PageKind.TEXT, "Fehler", "Keine Levels in der DB gefunden.");
@@ -291,7 +480,7 @@ public final class MainController {
 
       currentTask = taskRepo.findFirstTaskOfLevel(currentLevel.id());
       if (currentTask == null) {
-        statusLabel.setText("No tasks found for first level (SQLite table: task)");
+        setStatus(StatusKind.ERROR, "Keine Aufgaben für dieses Level gefunden.");
         showNoTask();
         setDialog(PageKind.TEXT, "Fehler", "Keine Tasks für dieses Level gefunden.");
         return;
@@ -299,12 +488,15 @@ public final class MainController {
 
       showTask(currentTask);
       startDialogForTaskStart(currentLevel, currentTask);
-      statusLabel.setText("Ready.");
+      setStatus(StatusKind.INFO, "Bereit.");
     } catch (Exception e) {
-      statusLabel.setText("DB error: " + e.getMessage());
+      // This now uses your new helper (root cause + message, not full trace)
+      setStatusFromException(StatusKind.ERROR, "DB-Fehler", e);
+      e.printStackTrace();
+
       currentTask = null;
       codeTextArea.setText(DEFAULT_CODE);
-      setDialog(PageKind.TEXT, "DB error", String.valueOf(e.getMessage()));
+      setDialog(PageKind.TEXT, "DB-Fehler", exceptionSummary(rootCause(e)));
     }
   }
 
@@ -515,15 +707,15 @@ public final class MainController {
   @FXML
   private void onSubmitClicked() {
     if (currentTask == null) {
-      statusLabel.setText("No task loaded.");
+      setStatus(StatusKind.WARNING, "Keine Aufgabe geladen.");
       return;
     }
     if (currentDialogPage == null || currentDialogPage.kind() != PageKind.TASK) {
-      statusLabel.setText("Not on a task page.");
+      setStatus(StatusKind.WARNING, "Du bist gerade nicht in der Aufgabenansicht.");
       return;
     }
 
-    statusLabel.setText("Running...");
+    setStatus(StatusKind.INFO, "Ich prüfe deine Lösung...");
 
     Thread.startVirtualThread(() -> {
       String code = codeTextArea.getText() == null ? "" : codeTextArea.getText();
@@ -536,35 +728,36 @@ public final class MainController {
         boolean canTrack = (!inPrologue && playerId > 0);
 
         if (!run.compiled()) {
-          statusLabel.setText("Compile error.");
-          System.err.println(run.stderr());
-          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
-          return;
-        }
-        if (run.message() != null && run.message().contains("timed out")) {
-          statusLabel.setText("Timed out (possible infinite loop).");
-          System.err.println(run.stderr());
-          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
-          return;
-        }
-        if (run.exitCode() != 0) {
-          statusLabel.setText("Runtime error (exit " + run.exitCode() + ").");
-          System.err.println(run.stderr());
-          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
-          return;
-        }
-        if (!validation.ok()) {
-          statusLabel.setText("Failed: " + validation.message());
+          setStatus(StatusKind.ERROR, formatCompileError(run.stderr()));
           if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
           return;
         }
 
-        // success: persist captured values + (possibly) create player via prologue name
+        if (run.message() != null && run.message().contains("timed out")) {
+          setStatus(StatusKind.ERROR, "Dein Programm braucht zu lange. Vermutlich gibt es eine Endlosschleife.");
+          System.err.println("--- TIMEOUT STDERR ---\n" + run.stderr());
+          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
+          return;
+        }
+
+        if (run.exitCode() != 0) {
+          setStatus(StatusKind.ERROR, formatRuntimeError(run.exitCode()));
+          System.err.println("--- RUNTIME STDERR (exit " + run.exitCode() + ") ---\n" + run.stderr());
+          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
+          return;
+        }
+
+        if (!validation.ok()) {
+          setStatus(StatusKind.WARNING, formatValidationMessage(validation.message()));
+          System.err.println("--- VALIDATION ---\n" + validation.message());
+          if (canTrack) taskResultRepo.incrementAttempts(playerId, currentTask.id());
+          return;
+        }
+
         tryPersistCapturedValue(currentTask, run.stdout());
 
-        statusLabel.setText("Success!");
+        setStatus(StatusKind.SUCCESS, "Super, das war korrekt!");
 
-        // Save hint usage + mark completed (non-prologue only)
         if (!inPrologue && playerId > 0) {
           taskResultRepo.setHintsUsed(playerId, currentTask.id(), shownHintCount);
           taskResultRepo.markCompleted(playerId, currentTask.id());
