@@ -140,9 +140,10 @@ public final class MainController {
 
     totalTasks = taskResultRepo.countAllNonPrologueTasks();
     updateProgressUi();
+    updateTutorialButtonState();
 
     Platform.runLater(() -> {
-      if (!autoStartEnabled) return; // NEW
+      if (!autoStartEnabled) return;
 
       // no player yet; create only after Prolog Task 2 (name).
       playerId = 0;
@@ -150,6 +151,13 @@ public final class MainController {
       updateProgressUi();
       loadFirstLevelFirstTask();
     });
+  }
+
+  private void updateTutorialButtonState() {
+    if (tutorialButton == null) return;
+
+    boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
+    tutorialButton.setDisable(inPrologue);
   }
 
   private void updateProgressUi() {
@@ -188,6 +196,7 @@ public final class MainController {
     try {
       currentLevel = levelRepo.findFirstLevel();
       updateProgressUi();
+      updateTutorialButtonState();
 
       if (currentLevel == null) {
         statusLabel.setText("No levels found (SQLite table: level)");
@@ -226,8 +235,8 @@ public final class MainController {
   // Task UI
   // --------------------
   private void showTask(TaskDto task) {
-    // Progress visibility can change when level changes, so refresh here too.
     updateProgressUi();
+    updateTutorialButtonState();
 
     taskTitleLabel.setText(task.title() != null ? task.title() : "-");
 
@@ -249,6 +258,7 @@ public final class MainController {
 
   private void showNoTask() {
     updateProgressUi();
+    updateTutorialButtonState();
 
     taskTitleLabel.setText("-");
     if (codeTextArea.getText() == null || codeTextArea.getText().isBlank()) {
@@ -359,7 +369,6 @@ public final class MainController {
 
       skipButton.setVisible(showSkip);
       skipButton.setManaged(showSkip);
-      // optional: also disable when hidden isn't necessary; but safe:
       skipButton.setDisable(!showSkip);
     }
 
@@ -391,6 +400,7 @@ public final class MainController {
       codeTextArea.setDisable(true);
       submitButton.setDisable(true);
       hintButton.setDisable(true);
+      updateTutorialButtonState();
       return;
     }
 
@@ -445,7 +455,6 @@ public final class MainController {
       var validation = validationEngine.validate(currentTask.validation(), run, code);
 
       Platform.runLater(() -> {
-        // ---- failure cases: count attempt (only if player exists and not prologue) ----
         boolean inPrologue = currentLevel != null && currentLevel.id() == PROLOGUE_LEVEL_ID;
         boolean canTrack = (!inPrologue && playerId > 0);
 
@@ -509,7 +518,6 @@ public final class MainController {
 
     statusLabel.setText("Skipped.");
 
-    // Move to next task/level without awarding completion/score.
     dialogQueue.clear();
     dialogOnFinished = null;
 
@@ -545,7 +553,7 @@ public final class MainController {
       try {
         if (playerId <= 0) {
           playerId = playerRepo.createPlayer();
-          updateProgressUi(); // progress becomes visible once we're out of prologue
+          updateProgressUi();
         }
         playerRepo.updatePlayerName(playerId, maybeName);
       } catch (Exception e) {
@@ -651,7 +659,6 @@ public final class MainController {
   private void onTutorialClicked() {
     if (currentLevel == null) return;
 
-    // Up to current level (by order_index). Prolog excluded in query.
     List<TutorialRepository.TutorialRow> tutorials =
         tutorialRepo.findTutorialsUpToLevel(currentLevel.orderIndex());
 
@@ -698,7 +705,7 @@ public final class MainController {
 
     HBox controls = new HBox(10, prev, next, new HBox(), close);
     controls.setStyle("-fx-padding: 10;");
-    controls.getChildren().get(2).setStyle("-fx-hgrow: ALWAYS;"); // spacer hack-free would be Region; keep minimal
+    controls.getChildren().get(2).setStyle("-fx-hgrow: ALWAYS;");
 
     BorderPane root = new BorderPane();
     root.setTop(header);
@@ -715,7 +722,6 @@ public final class MainController {
   private String markdownToHtml(String md) {
     String body = mdRenderer.render(mdParser.parse(md == null ? "" : md));
 
-    // small default styling, including code blocks
     String css = """
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; }
         pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Courier New', monospace; }
@@ -748,6 +754,7 @@ public final class MainController {
 
       this.currentTask = task;
       this.currentLevel = levelRepo.findById(task.levelId()).orElse(null);
+      updateTutorialButtonState();
 
       if (currentLevel == null) {
         statusLabel.setText("Load failed: level not found for task " + task.id());
@@ -771,6 +778,7 @@ public final class MainController {
 
     this.currentLevel = levelRepo.findLastNonPrologueLevel().orElse(null);
     this.currentTask = null;
+    updateTutorialButtonState();
 
     if (currentLevel != null) {
       levelTitleLabel.setText(
@@ -790,6 +798,8 @@ public final class MainController {
     this.playerId = playerId;
 
     this.currentLevel = levelRepo.findById(levelId).orElse(null);
+    updateTutorialButtonState();
+
     if (currentLevel == null) {
       statusLabel.setText("Level not found: " + levelId);
       showNoTask();
@@ -797,7 +807,6 @@ public final class MainController {
       return;
     }
 
-    // update title
     levelTitleLabel.setText(
         (currentLevel.title() != null && !currentLevel.title().isBlank())
             ? currentLevel.title()
