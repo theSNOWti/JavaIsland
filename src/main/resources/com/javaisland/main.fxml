@@ -1,23 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.layout.Region?>
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TextArea?>
-<?import javafx.scene.layout.BorderPane?>
-<?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.StackPane?>
-<?import javafx.scene.layout.VBox?>
 
-<StackPane xmlns="http://javafx.com/javafx"
-           xmlns:fx="http://javafx.com/fxml"
-           fx:controller="com.javaisland.controller.MainController">
+<StackPane xmlns:fx="http://javafx.com/fxml"
+           fx:controller="com.javaisland.controller.MainController"
+           fx:id="mainRoot">
 
-  <BorderPane fx:id="mainRoot">
+  <!-- Background image (lowest layer) -->
+  <ImageView fx:id="backgroundImageView"
+              pickOnBounds="false"
+              preserveRatio="false"
+              smooth="true">
+      <image>
+          <Image url="@images/JavaIsland1.png"/>
+      </image>
+  </ImageView>
+
+  <BorderPane fx:id="uiRoot">
 
     <top>
       <HBox spacing="10">
@@ -42,24 +54,32 @@
           <Insets top="18" right="18" bottom="18" left="18"/>
         </padding>
 
-        <Label text="Level" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
-        <Label fx:id="levelTitleLabel" text="-" style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+        <Label text="Level"
+                style="-fx-text-fill: #F2F4F8; -fx-font-weight: bold;
+                        -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.75), 10, 0.35, 0, 1);" />
+        <Label fx:id="levelTitleLabel"
+                text="..."
+                style="-fx-text-fill: #F2F4F8; -fx-font-weight: bold;
+                        -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.75), 10, 0.35, 0, 1);" />
 
         <Separator/>
 
         <Label text="Task" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
-        <Label fx:id="taskTitleLabel" text="-" style="-fx-font-size: 16; -fx-font-weight: bold;"/>
+        <Label fx:id="taskTitleLabel"
+                text="..."
+                style="-fx-text-fill: #F2F4F8;
+                        -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.75), 10, 0.35, 0, 1);" />
 
         <!-- Two columns: dialog (left) + work area (right) -->
         <HBox spacing="16" VBox.vgrow="ALWAYS">
 
-          <!-- Left: Dialog panel (starts at hint height, ends at code bottom) -->
+          <!-- Left: Dialog panel -->
           <VBox fx:id="dialogOverlay"
                 spacing="10"
                 prefWidth="360"
                 minWidth="280"
                 maxWidth="520"
-                style="-fx-background-color: rgba(0,0,0,0.75); -fx-padding: 16; -fx-background-radius: 12;"
+                styleClass="glass-pane"
                 VBox.vgrow="ALWAYS">
             <Label fx:id="dialogTitleLabel"
                   text="-"
@@ -85,39 +105,45 @@
           <!-- Right: Hints + Code -->
           <VBox spacing="10" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS">
 
-            <!-- Hints -->
+            <!-- Hints toolbar -->
             <HBox spacing="10">
               <Button fx:id="hintButton" text="Show hint" onAction="#onHintClicked"/>
               <Label fx:id="hintStatusLabel" text="" style="-fx-opacity: 0.75;"/>
-              
+
               <Region HBox.hgrow="ALWAYS"/>
 
               <Button fx:id="tutorialButton" text="Tutorial" onAction="#onTutorialClicked"/>
             </HBox>
 
-            <ScrollPane fitToWidth="true" prefViewportHeight="140" pannable="true">
+            <!-- Hints box -->
+            <ScrollPane fx:id="hintBox" fitToWidth="true" prefViewportHeight="140" pannable="true"
+                        styleClass="glass-pane">
               <content>
                 <Label fx:id="hintsLabel"
                       text=""
                       wrapText="true"
-                      style="-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.04); -fx-background-radius: 8;"/>
+                      style="-fx-padding: 6;"/>
               </content>
             </ScrollPane>
 
             <Separator/>
 
-            <Label text="Code" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
-            <TextArea fx:id="codeTextArea"
-                      promptText="Write your code here..."
-                      wrapText="false"
-                      prefRowCount="14"
-                      VBox.vgrow="ALWAYS"/>
+            <!-- Code box -->
+            <VBox fx:id="codeBox" spacing="10" VBox.vgrow="ALWAYS" styleClass="glass-pane">
+              <Label text="Code" style="-fx-font-size: 12; -fx-opacity: 0.75;"/>
 
-            <HBox spacing="10">
-              <HBox HBox.hgrow="ALWAYS"/>
-              <Button fx:id="submitButton" text="Submit" onAction="#onSubmitClicked"/>
-              <Button fx:id="skipButton" text="Skip" onAction="#onSkipClicked" />
-            </HBox>
+              <TextArea fx:id="codeTextArea"
+                        promptText="Write your code here..."
+                        wrapText="false"
+                        prefRowCount="14"
+                        VBox.vgrow="ALWAYS"/>
+
+              <HBox spacing="10">
+                <HBox HBox.hgrow="ALWAYS"/>
+                <Button fx:id="submitButton" text="Submit" onAction="#onSubmitClicked"/>
+                <Button fx:id="skipButton" text="Skip" onAction="#onSkipClicked" />
+              </HBox>
+            </VBox>
 
           </VBox>
 
@@ -130,8 +156,8 @@
         <padding>
           <Insets top="10" right="18" bottom="14" left="18"/>
         </padding>
-        <Label text="Status:"/>
-        <Label fx:id="statusLabel" text="Loading..."/>
+        <Label text="Status:" styleClass="status-text"/>
+        <Label fx:id="statusLabel" text="Loading..." styleClass="status-text"/>
       </HBox>
     </bottom>
 

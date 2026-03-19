@@ -1,4 +1,81 @@
+/* Simple headings (if still used anywhere) */
 .title {
   -fx-font-size: 20px;
   -fx-font-weight: bold;
+}
+
+/* -------------------------------
+   Glass panes over background image
+   ------------------------------- */
+.glass-pane {
+  -fx-background-color: rgba(0, 0, 0, 0.35);
+  -fx-background-radius: 12;
+  -fx-padding: 12;
+
+  -fx-border-color: rgba(255, 255, 255, 0.18);
+  -fx-border-radius: 12;
+  -fx-border-width: 1;
+}
+
+/* Focused state (toggled via code: "focused-glass" class) */
+.glass-pane.focused-glass {
+  -fx-background-color: rgba(0, 0, 0, 0.62);
+  -fx-border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Keep ScrollPane visuals transparent when used as a glass pane */
+.glass-pane.scroll-pane,
+.glass-pane.scroll-pane > .viewport {
+  -fx-background-color: transparent;
+}
+
+/* Readability defaults inside glass panes */
+.glass-pane .label {
+  -fx-text-fill: #F2F4F8;
+}
+
+/* Default TextArea colors when inside any glass pane */
+.glass-pane .text-area,
+.glass-pane .text-area .content {
+  -fx-text-fill: #F2F4F8;
+}
+
+/* -------------------------------
+   Code editor "merged" look
+   (#codeBox is the VBox wrapping the editor area in main.fxml)
+   ------------------------------- */
+#codeBox .text-area {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-padding: 0;
+}
+
+#codeBox .text-area .scroll-pane {
+  -fx-background-color: transparent;
+}
+
+#codeBox .text-area .scroll-pane .viewport {
+  -fx-background-color: transparent;
+}
+
+/* Actual editor surface (inner background) */
+#codeBox .text-area .content {
+  -fx-background-color: rgba(20, 20, 20, 0.35);
+  -fx-background-radius: 10;
+  -fx-background-insets: 0;
+  -fx-padding: 10;
+}
+
+/* Remove/soften default focus ring so it doesn't look like a second box */
+#codeBox .text-area:focused {
+  -fx-faint-focus-color: transparent;
+  -fx-focus-color: rgba(255, 255, 255, 0.22);
+}
+
+/* -------------------------------
+   Status text (bottom bar)
+   ------------------------------- */
+.status-text {
+  -fx-text-fill: #F2F4F8;
+  -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.65), 8, 0.3, 0, 1);
 }

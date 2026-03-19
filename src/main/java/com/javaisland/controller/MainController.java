@@ -24,13 +24,18 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.web.WebView;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.beans.value.ChangeListener;
+import javafx.scene.Node;
 
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -48,7 +53,8 @@ public final class MainController {
   // --------------------
   // UI (main)
   // --------------------
-  @FXML private BorderPane mainRoot;
+  @FXML private StackPane mainRoot;
+  @FXML private ImageView backgroundImageView;
 
   @FXML private Label statusLabel;
   @FXML private Label levelTitleLabel;
@@ -73,6 +79,9 @@ public final class MainController {
   @FXML private Label dialogTitleLabel;
   @FXML private Label dialogTextLabel;
   @FXML private Button dialogNextButton;
+
+  @FXML private ScrollPane hintBox;
+  @FXML private VBox codeBox;
 
   @FXML private Button tutorialButton;
 
@@ -138,6 +147,11 @@ public final class MainController {
     submitButton.setDisable(true);
     hintButton.setDisable(true);
 
+    if (mainRoot != null && backgroundImageView != null) {
+      backgroundImageView.fitWidthProperty().bind(mainRoot.widthProperty());
+      backgroundImageView.fitHeightProperty().bind(mainRoot.heightProperty());
+    }
+
     totalTasks = taskResultRepo.countAllNonPrologueTasks();
     updateProgressUi();
     updateTutorialButtonState();
@@ -151,6 +165,69 @@ public final class MainController {
       updateProgressUi();
       loadFirstLevelFirstTask();
     });
+
+    setupGlassFocus();
+  }
+
+  private void setupGlassFocus() {
+    // Helper: activate exactly one pane
+    Runnable clearAll = () -> {
+      removeFocusedGlass(dialogOverlay);
+      removeFocusedGlass(hintBox);
+      removeFocusedGlass(codeBox);
+    };
+
+    ChangeListener<Boolean> onDialogFocus = (obs, oldV, now) -> {
+      if (!now) return;
+      clearAll.run();
+      addFocusedGlass(dialogOverlay);
+    };
+
+    ChangeListener<Boolean> onHintFocus = (obs, oldV, now) -> {
+      if (!now) return;
+      clearAll.run();
+      addFocusedGlass(hintBox);
+    };
+
+    ChangeListener<Boolean> onCodeFocus = (obs, oldV, now) -> {
+      if (!now) return;
+      clearAll.run();
+      addFocusedGlass(codeBox);
+    };
+
+    // Dialog area: next button gets focus; also allow overlay itself if focus traversable
+    if (dialogNextButton != null) dialogNextButton.focusedProperty().addListener(onDialogFocus);
+    if (dialogOverlay != null) {
+      dialogOverlay.setFocusTraversable(true);
+      dialogOverlay.focusedProperty().addListener(onDialogFocus);
+    }
+
+    // Hint area: hint button / tutorial button / scroll pane
+    if (hintButton != null) hintButton.focusedProperty().addListener(onHintFocus);
+    if (tutorialButton != null) tutorialButton.focusedProperty().addListener(onHintFocus);
+    if (hintBox != null) {
+      hintBox.setFocusTraversable(true);
+      hintBox.focusedProperty().addListener(onHintFocus);
+    }
+
+    // Code area: textarea + submit/skip
+    if (codeTextArea != null) codeTextArea.focusedProperty().addListener(onCodeFocus);
+    if (submitButton != null) submitButton.focusedProperty().addListener(onCodeFocus);
+    if (skipButton != null) skipButton.focusedProperty().addListener(onCodeFocus);
+    if (codeBox != null) {
+      codeBox.setFocusTraversable(true);
+      codeBox.focusedProperty().addListener(onCodeFocus);
+    }
+  }
+
+  private static void addFocusedGlass(Node n) {
+    if (n == null) return;
+    if (!n.getStyleClass().contains("focused-glass")) n.getStyleClass().add("focused-glass");
+  }
+
+  private static void removeFocusedGlass(Node n) {
+    if (n == null) return;
+    n.getStyleClass().remove("focused-glass");
   }
 
   private void updateTutorialButtonState() {
