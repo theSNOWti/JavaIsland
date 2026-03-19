@@ -40,8 +40,8 @@
         <HBox HBox.hgrow="ALWAYS"/>
 
         <!-- Progress (right side) -->
-        <Label fx:id="scoreLabel" text="" style="-fx-opacity: 0.85;"/>
-        <Label fx:id="progressLabel" text="" style="-fx-opacity: 0.8;"/>
+        <Label fx:id="scoreLabel" text="" styleClass="hud-text" style="-fx-opacity: 0.85;"/>
+        <Label fx:id="progressLabel" text="" styleClass="hud-text" style="-fx-opacity: 0.8;"/>
         <ProgressBar fx:id="progressBar"
                      prefWidth="180"
                      progress="0.0"/>

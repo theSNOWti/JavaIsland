@@ -79,3 +79,8 @@
   -fx-text-fill: #F2F4F8;
   -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.65), 8, 0.3, 0, 1);
 }
+
+.hud-text {
+  -fx-text-fill: #F2F4F8;
+  -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.65), 8, 0.3, 0, 1);
+}
