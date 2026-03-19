@@ -14,6 +14,7 @@ import com.javaisland.repo.TaskRepository;
 import com.javaisland.repo.TutorialRepository;
 import com.javaisland.run.JavaRunner;
 import com.javaisland.template.StarterCodeTemplate;
+import com.javaisland.ui.StatusTextFormatter;
 import com.javaisland.validation.ValidationEngine;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
@@ -372,20 +373,7 @@ public final class MainController {
   }
 
   private String formatValidationMessage(String raw) {
-    if (raw == null || raw.isBlank()) return "Das Ergebnis ist leider noch nicht korrekt.";
-
-    String m = raw.trim();
-
-    if (m.toLowerCase().contains("expected") || m.toLowerCase().contains("regex")) {
-      return "Die Ausgabe stimmt noch nicht ganz. Prüfe Format und Inhalt der Ausgabe.";
-    }
-    if (m.toLowerCase().contains("nullpointer")) {
-      return "Da ist etwas schiefgelaufen (Null-Wert). Prüfe Variablen und Rückgabewerte.";
-    }
-    if (m.toLowerCase().contains("assert")) {
-      return "Die Aufgabe ist noch nicht erfüllt. Schau dir die Anforderungen nochmal an.";
-    }
-    return "Fast! " + m;
+    return StatusTextFormatter.formatValidationMessage(raw);
   }
 
   /**
@@ -393,100 +381,7 @@ public final class MainController {
    * to show the first meaningful error line (like "Zeile 3: ...").
    */
   private String formatCompileError(String stderr) {
-    // Always try to show something meaningful in the UI.
-    String summary = extractJavacErrorSummaryWithContext(stderr);
-    if (summary != null && !summary.isBlank()) return summary;
-
-    // Absolute fallback: show first lines of stderr (still in UI)
-    return firstNonBlankLines(stderr, 3);
-  }
-
-  /**
-   * Extracts a short javac error message for the UI.
-   * Includes line number if available and (if present) the source line + caret marker.
-   *
-   * Example:
-   *   "Zeile 3: incompatible types: String cannot be converted to int
-   *    int trees = "34";
-   *                ^"
-   */
-  private static String extractJavacErrorSummaryWithContext(String stderr) {
-    if (stderr == null || stderr.isBlank()) return null;
-
-    String s = stderr.replace("\r\n", "\n");
-    String[] lines = s.split("\n");
-
-    for (int i = 0; i < lines.length; i++) {
-      String line = lines[i].trim();
-      if (line.isBlank()) continue;
-
-      // Primary error line patterns:
-      // 1) "Main.java:3: error: <msg>"
-      // 2) "error: <msg>"
-      Integer lineNo = null;
-      String msg = null;
-
-      int errIdx = line.indexOf(": error:");
-      if (errIdx >= 0) {
-        msg = line.substring(errIdx + ": error:".length()).trim();
-
-        String beforeError = line.substring(0, errIdx);
-        // expect "...:<line>:"
-        int lastColon = beforeError.lastIndexOf(':');
-        if (lastColon >= 0) {
-          int prevColon = beforeError.lastIndexOf(':', lastColon - 1);
-          if (prevColon >= 0) {
-            String maybeNum = beforeError.substring(prevColon + 1, lastColon).trim();
-            try { lineNo = Integer.parseInt(maybeNum); } catch (NumberFormatException ignored) {}
-          }
-        }
-      } else if (line.startsWith("error:")) {
-        msg = line.substring("error:".length()).trim();
-      }
-
-      if (msg == null || msg.isBlank()) continue;
-
-      StringBuilder out = new StringBuilder();
-      if (lineNo != null) out.append("Zeile ").append(lineNo).append(": ");
-      out.append(msg);
-
-      // Try to include source line + caret if present (usually next 1-2 lines)
-      String srcLine = (i + 1 < lines.length) ? lines[i + 1] : null;
-      String caretLine = (i + 2 < lines.length) ? lines[i + 2] : null;
-
-      boolean hasCaret = caretLine != null && caretLine.trim().equals("^");
-      if (srcLine != null && !srcLine.trim().isBlank() && hasCaret) {
-        out.append("\n").append(srcLine.stripTrailing());
-        out.append("\n").append(caretLine.stripTrailing());
-      }
-
-      return out.toString();
-    }
-
-    return null;
-  }
-
-  private static String firstNonBlankLines(String text, int maxLines) {
-    if (text == null || text.isBlank()) return "Kompilierfehler.";
-
-    String s = text.replace("\r\n", "\n");
-    String[] lines = s.split("\n");
-
-    StringBuilder out = new StringBuilder();
-    int added = 0;
-
-    for (String raw : lines) {
-      String line = raw.stripTrailing();
-      if (line.isBlank()) continue;
-
-      if (out.length() > 0) out.append("\n");
-      out.append(line);
-
-      added++;
-      if (added >= maxLines) break;
-    }
-
-    return out.length() == 0 ? "Kompilierfehler." : out.toString();
+    return StatusTextFormatter.formatCompileError(stderr);
   }
 
   private String formatRuntimeError(int exitCode) {
