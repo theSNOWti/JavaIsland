@@ -446,7 +446,6 @@ public final class MainController {
   private void showTask(TaskDto task) {
     updateProgressUi();
     updateTutorialButtonState();
-    applyTaskBackground(task);
 
     taskTitleLabel.setText(task.title() != null ? task.title() : "-");
 
@@ -503,6 +502,8 @@ public final class MainController {
     dialogQueue.clear();
     dialogOnFinished = null;
 
+    applyTaskBackground(completedTask);
+    
     enqueueText("Erfolg", completedTask.successText());
 
     TaskDto next = taskRepo.findNextTaskInLevel(
